@@ -1,0 +1,10 @@
+# screenshots from test runs
+shots/
+node_modules/
+*.log
+# superseded generator output from earlier level sets
+gen/part*.json
+gen/pool*.json
+gen/scrolls.json
+gen/scrolls3.json
+gen/g3run*.log

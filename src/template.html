@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Stubin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* One visual world: a lamp-lit tunnel. Amber is the fuse, red is danger, green is defused. */
+  /* Layout: full-height app = HUD bar + canvas stage; menus are overlays on top of the live scene. */
+  --ink: #0b0e13;
+  --panel: #141a23;
+  --panel-2: #1d2531;
+  --line: rgba(255, 255, 255, .1);
+  --paper: #f6edda;
+  --muted: #a5adba;
+  --fuse: #ffb224;
+  --fuse-deep: #b86f00;
+  --danger: #ff5340;
+  --ok: #58e08f;
+  --acc: #ffb224;
+  --display: 'Saira Stencil One', 'Arial Black', Impact, sans-serif;
+  --ui: 'Barlow Semi Condensed', 'Arial Narrow', 'Segoe UI', system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--ink); color: var(--paper); font-family: var(--ui); font-weight: 500; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; padding: 0; }
+button:focus-visible, a:focus-visible, label:focus-within { outline: 3px solid var(--fuse); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+#app { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr; user-select: none; -webkit-user-select: none; }
+#hud { grid-row: 1; }
+#stage { grid-row: 2; position: relative; min-height: 0; touch-action: none; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ---------- HUD ---------- */
+#hud { display: flex; align-items: center; gap: 14px; padding: 8px 14px; background: linear-gradient(#171d27, #10151c); border-bottom: 1px solid var(--line); z-index: 2; }
+.ib { width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line), 0 2px 0 #06080b; color: var(--paper); flex: none; }
+.ib:hover { background: #283243; }
+.ib:active { transform: translateY(2px); box-shadow: inset 0 0 0 1px var(--line); }
+.ib svg { width: 22px; height: 22px; }
+.lvl { display: flex; flex-direction: column; line-height: 1.05; min-width: 0; flex: none; }
+.lvl span { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--acc); font-weight: 700; white-space: nowrap; }
+.lvl strong { font-family: var(--display); font-weight: 400; font-size: 22px; letter-spacing: .02em; white-space: nowrap; }
+.fuse { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 90px; --r: 1; }
+.rope { position: relative; flex: 1; height: 10px; border-radius: 5px; background: repeating-linear-gradient(115deg, #e0bb80 0 6px, #b98f55 6px 12px); box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .25), 0 1px 0 rgba(0, 0, 0, .6); }
+.rope .burnt { position: absolute; inset: 0 auto 0 0; width: calc((1 - var(--r)) * 100%); border-radius: 5px 0 0 5px; background: repeating-linear-gradient(115deg, #2c2824 0 6px, #1b1815 6px 12px); }
+.rope .spark { position: absolute; top: 50%; left: calc((1 - var(--r)) * 100%); width: 26px; height: 26px; margin: -13px; border-radius: 50%; background: radial-gradient(circle, #fff 0 14%, #ffd66e 28%, rgba(255, 120, 20, .65) 50%, transparent 70%); animation: flick .11s infinite alternate; }
+@keyframes flick { from { transform: scale(.8) rotate(0deg); } to { transform: scale(1.15) rotate(40deg); } }
+.fuse svg { width: 30px; height: 30px; flex: none; margin-left: -6px; }
+.fuse b { font-family: var(--display); font-weight: 400; font-size: 24px; min-width: 62px; font-variant-numeric: tabular-nums; }
+.fuse.urgent b { color: var(--danger); animation: throb .5s infinite alternate; }
+@keyframes throb { to { transform: scale(1.12); } }
+.acts { display: flex; gap: 8px; flex: none; }
+.pushc { display: flex; flex-direction: column; line-height: 1.05; flex: none; padding-left: 12px; border-left: 1px solid var(--line); }
+.pushc span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.pushc strong { font-weight: 400; white-space: nowrap; }
+.pushc b { font-family: var(--display); font-weight: 400; font-size: 22px; font-variant-numeric: tabular-nums; }
+.pushc i { font-style: normal; font-size: 15px; color: #8fd8ff; font-weight: 600; }
+.pushc.over b { color: #ffb4a8; }
+.lv .md { position: absolute; top: 6px; left: 7px; width: 16px; height: 16px; color: #8fd8ff; }
+.lv.next .md { color: #1d4a6b; }
+.shead .tot .md { width: 20px; height: 20px; color: #8fd8ff; }
+.shead .tot .sep { width: 14px; }
+.pushres { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.05); font-size: 17px; color: #cfd6df; text-align: left; }
+.pushres svg { width: 34px; height: 34px; flex: none; color: #4b5666; }
+.pushres.good { background: rgba(143,216,255,.12); color: var(--paper); }
+.pushres.good svg { color: #8fd8ff; filter: drop-shadow(0 0 10px rgba(143,216,255,.6)); animation: starpop .5s cubic-bezier(.2,1.6,.4,1) .7s backwards; }
+.arc { display: flex; flex-direction: column; line-height: 1.05; align-items: flex-end; flex: none; }
+.arc span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.arc strong { font-family: var(--display); font-weight: 400; font-size: 20px; font-variant-numeric: tabular-nums; }
+.miss { display: inline-flex; gap: 4px; }
+.miss i { width: 10px; height: 10px; border-radius: 50%; background: #39424f; }
+.miss i.on { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+#hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); max-width: min(92%, 620px); padding: 9px 16px; border-radius: 999px; background: rgba(10, 13, 18, .82); box-shadow: inset 0 0 0 1px var(--line); font-size: 17px; text-align: center; text-wrap: balance; pointer-events: none; transition: opacity .5s; z-index: 1; }
+#hint.off { opacity: 0; }
+
+/* ---------- touch pad ---------- */
+#pad { position: absolute; right: 14px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); display: none; grid-template: repeat(3, 58px) / repeat(3, 58px); gap: 4px; z-index: 1; opacity: .92; }
+#pad button { border-radius: 14px; background: rgba(29, 37, 49, .9); box-shadow: inset 0 0 0 1px var(--line), 0 3px 0 rgba(0, 0, 0, .6); display: grid; place-items: center; touch-action: none; }
+#pad button:active, #pad button.dn { background: var(--fuse); color: #201400; transform: translateY(2px); }
+#pad svg { width: 26px; height: 26px; }
+#pad .u { grid-area: 1 / 2; } #pad .l { grid-area: 2 / 1; } #pad .r { grid-area: 2 / 3; } #pad .d { grid-area: 3 / 2; }
+@media (pointer: coarse) { #app.playing #pad { display: grid; } #hint { bottom: auto; top: 10px; } }
+
+/* ---------- screens ---------- */
+.screen { position: absolute; inset: 0; z-index: 5; overflow: auto; -webkit-overflow-scrolling: touch; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 10px 24px; border-radius: 12px; font-weight: 700; font-size: 20px; letter-spacing: .02em; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line), 0 4px 0 #06080b; }
+.btn:hover { background: #283243; }
+.btn:active { transform: translateY(3px); box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 #06080b; }
+.btn.primary { background: linear-gradient(#ffc64a, #ffa40f); color: #241500; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 4px 0 var(--fuse-deep); }
+.btn.primary:hover { background: linear-gradient(#ffd166, #ffae22); }
+.btn.primary:active { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 1px 0 var(--fuse-deep); }
+.btn svg { width: 20px; height: 20px; }
+
+#title { display: flex; align-items: stretch; background: linear-gradient(90deg, rgba(8, 10, 14, .96) 0, rgba(8, 10, 14, .9) 36%, rgba(8, 10, 14, .35) 70%, rgba(8, 10, 14, .1) 100%); }
+.tcol { display: flex; flex-direction: column; justify-content: center; gap: 22px; padding: clamp(20px, 5vw, 64px); max-width: 640px; }
+.kick { font-size: 15px; letter-spacing: .22em; text-transform: uppercase; color: var(--fuse); font-weight: 700; }
+h1 { font-family: var(--display); font-weight: 400; font-size: clamp(64px, 13vw, 148px); line-height: .86; margin: 0; letter-spacing: .01em; color: var(--paper); text-shadow: 0 6px 0 #000, 0 0 60px rgba(255, 160, 30, .25); }
+.wick { position: relative; height: 8px; margin: 2px 0 0; border-radius: 4px; background: repeating-linear-gradient(115deg, #e0bb80 0 6px, #b98f55 6px 12px); max-width: 520px; }
+.wick::before { content: ''; position: absolute; inset: 0 auto 0 0; border-radius: 4px 0 0 4px; background: repeating-linear-gradient(115deg, #2c2824 0 6px, #1b1815 6px 12px); animation: burn 9s linear infinite; }
+.wick::after { content: ''; position: absolute; top: 50%; width: 30px; height: 30px; margin: -15px; border-radius: 50%; background: radial-gradient(circle, #fff 0 14%, #ffd66e 28%, rgba(255, 120, 20, .65) 50%, transparent 70%); animation: burnx 9s linear infinite, flick .11s infinite alternate; }
+@keyframes burn { from { width: 4%; } to { width: 100%; } }
+@keyframes burnx { from { left: 4%; } to { left: 100%; } }
+.tag { font-size: clamp(20px, 2.6vw, 26px); font-weight: 600; margin: 0; text-wrap: balance; }
+.tbtns { display: flex; flex-wrap: wrap; gap: 12px; }
+.how { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 17px; color: #d7d0c0; max-width: 54ch; }
+.how li { padding-left: 18px; position: relative; }
+.how li::before { content: ''; position: absolute; left: 0; top: .55em; width: 8px; height: 8px; border-radius: 2px; background: var(--fuse); transform: rotate(45deg); }
+.foot { font-size: 14px; color: var(--muted); letter-spacing: .04em; }
+
+#select { background: rgba(8, 10, 14, .93); padding: 0 0 60px; }
+.shead { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 14px; padding: 12px clamp(14px, 4vw, 40px); background: rgba(11, 14, 19, .96); border-bottom: 1px solid var(--line); }
+.shead h2 { font-family: var(--display); font-weight: 400; font-size: 28px; margin: 0; flex: 1; }
+.shead .tot { font-weight: 700; font-size: 18px; display: inline-flex; align-items: center; gap: 6px; color: var(--fuse); font-variant-numeric: tabular-nums; }
+.shead .tot svg { width: 20px; height: 20px; }
+.worlds { display: grid; gap: 26px; padding: 22px clamp(14px, 4vw, 40px); max-width: 1100px; margin: 0 auto; }
+.world { --acc: #ffb224; }
+.world header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; padding-left: 12px; border-left: 5px solid var(--acc); }
+.world header small { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--acc); }
+.world h3 { font-family: var(--display); font-weight: 400; font-size: 26px; margin: 0; }
+.world header em { font-style: normal; color: var(--muted); font-size: 16px; flex: 1; }
+.world header b { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 520px) { .lgrid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .lgrid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+.lv { position: relative; aspect-ratio: 1 / .92; border-radius: 12px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--line), 0 4px 0 #06080b; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.lv .n { font-family: var(--display); font-size: 26px; line-height: 1; }
+.lv .st { display: flex; gap: 2px; height: 14px; }
+.lv .st svg { width: 14px; height: 14px; color: #3b4554; }
+.lv .st svg.on { color: var(--fuse); }
+.lv .sc { position: absolute; top: 6px; right: 7px; width: 16px; height: 16px; color: var(--acc); }
+.lv:hover { background: #283243; }
+.lv:active { transform: translateY(3px); box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 #06080b; }
+.lv.done { box-shadow: inset 0 0 0 2px var(--acc), 0 4px 0 #06080b; }
+.lv.next { background: linear-gradient(#ffc64a, #ffa40f); color: #241500; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 4px 0 var(--fuse-deep); }
+.lv.next .st svg { color: rgba(60, 35, 0, .35); }
+.lv.next .sc { color: #241500; }
+.lv.locked { background: #12161d; color: #56606f; cursor: not-allowed; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.lv.locked .lock { width: 18px; height: 18px; }
+.sfoot { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; justify-content: space-between; padding: 0 clamp(14px, 4vw, 40px); max-width: 1100px; margin: 0 auto; color: var(--muted); font-size: 16px; }
+.sfoot label { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 4px; border-radius: 8px; }
+.sfoot input { width: 20px; height: 20px; accent-color: var(--fuse); }
+
+#overlay { display: grid; place-items: center; background: rgba(6, 8, 11, .62); padding: 18px; }
+.card { width: min(100%, 440px); background: linear-gradient(#1b222d, #131921); border-radius: 18px; padding: 26px 26px 24px; box-shadow: inset 0 0 0 1px var(--line), 0 24px 60px rgba(0, 0, 0, .6); display: grid; gap: 14px; text-align: center; animation: pop .28s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes pop { from { transform: scale(.88); opacity: 0; } }
+.card .kick { color: var(--acc); }
+.card h2 { font-family: var(--display); font-weight: 400; font-size: 44px; line-height: 1; margin: 0; text-wrap: balance; }
+.card h2.bad { color: var(--danger); }
+.card h2.good { color: var(--ok); }
+.card p { margin: 0; font-size: 19px; color: #d7d0c0; text-wrap: balance; }
+.card p b { color: var(--paper); font-variant-numeric: tabular-nums; }
+.stars { display: flex; justify-content: center; gap: 10px; }
+.stars svg { width: 56px; height: 56px; color: #2c3542; }
+.stars svg.on { color: var(--fuse); filter: drop-shadow(0 0 12px rgba(255, 178, 36, .6)); animation: starpop .45s cubic-bezier(.2, 1.6, .4, 1) backwards; }
+.stars svg.on:nth-child(2) { animation-delay: .18s; } .stars svg.on:nth-child(3) { animation-delay: .36s; }
+@keyframes starpop { from { transform: scale(0) rotate(-40deg); } }
+.cbtns { display: grid; gap: 10px; margin-top: 6px; }
+.cbtns .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cbtns .btn { width: 100%; }
+kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; background: rgba(0, 0, 0, .25); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
+
+@media (max-width: 620px) {
+  #hud { gap: 8px; padding: 6px 8px; flex-wrap: wrap; }
+  .lvl { flex: 1; }
+  .fuse { order: 9; flex-basis: 100%; }
+  .ib { width: 38px; height: 38px; }
+  .lvl strong { font-size: 18px; } .lvl span { font-size: 11px; }
+  .pushc { padding-left: 8px; } .pushc b { font-size: 18px; } .pushc span { font-size: 10px; } .pushc i { font-size: 13px; }
+  .fuse b { font-size: 19px; min-width: 48px; } .fuse svg { display: none; }
+  .fuse { gap: 8px; min-width: 60px; }
+  #title { background: linear-gradient(180deg, rgba(8, 10, 14, .95) 0, rgba(8, 10, 14, .86) 70%, rgba(8, 10, 14, .55) 100%); }
+  .tcol { justify-content: flex-start; gap: 16px; }
+  .how { font-size: 16px; }
+  #hint { font-size: 15px; border-radius: 16px; }
+  .card h2 { font-size: 36px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rope .spark, .wick::after, .fuse.urgent b, .card, .stars svg.on { animation: none; }
+  .wick::before { animation: none; width: 35%; } .wick::after { left: 35%; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud" hidden>
+    <button class="ib" id="btnPause" aria-label="Paus" title="Paus (Esc)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
+    <div class="lvl"><span id="hudWorld">Kloakerna</span><strong id="hudLevel">Bana 1</strong></div>
+    <div class="pushc" id="hudPush" title="Knuffar du har gjort, och minsta möjliga för banan"><span>Knuffar</span><strong><b id="hudPushN">0</b> <i id="hudPar"></i></strong></div>
+    <div class="fuse" id="fuse" role="timer" aria-label="Tid kvar">
+      <div class="rope"><i class="burnt"></i><i class="spark"></i></div>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="15" cy="19" r="10" fill="#1b1f27" stroke="#000" stroke-width="1.5"/><path d="M9 16a7 7 0 0 1 4-4" stroke="#8b94a3" stroke-width="2" fill="none" stroke-linecap="round"/><rect x="12" y="6" width="6" height="4" rx="1" fill="#9aa3b2"/></svg>
+      <b id="hudTime">0,0</b>
+    </div>
+    <div class="arc" id="hudArc" hidden><span>Poäng</span><strong id="hudScore">0</strong><span class="miss" id="hudMiss" aria-label="Missar"><i></i><i></i><i></i></span></div>
+    <div class="acts">
+      <button class="ib" id="btnUndo" aria-label="Ångra" title="Ångra (Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="ib" id="btnRestart" aria-label="Börja om" title="Börja om (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
+      <button class="ib" id="btnSound" aria-label="Ljud av eller på" title="Ljud (M)"></button>
+    </div>
+  </header>
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="hint" class="off"></div>
+    <div id="pad" aria-hidden="true">
+      <button class="u" data-d="0"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5l8 12H4z"/></svg></button>
+      <button class="l" data-d="2"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 12l12-8v16z"/></svg></button>
+      <button class="r" data-d="3"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 12L7 4v16z"/></svg></button>
+      <button class="d" data-d="1"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 19L4 7h16z"/></svg></button>
+    </div>
+  </div>
+
+  <section id="title" class="screen">
+    <div class="tcol">
+      <div class="kick">Knuffa väggar · Hinn före gnistan</div>
+      <div>
+        <h1>STUBIN</h1>
+        <div class="wick"></div>
+      </div>
+      <p class="tag">Någon har gömt bomber i tunnlarna under staden. Du har en labyrint, en brinnande stubin och två händer att knuffa med.</p>
+      <div class="tbtns">
+        <button class="btn primary" id="btnPlay">Spela</button>
+        <button class="btn" id="btnSelect">Välj bana</button>
+        <button class="btn" id="btnArcade">Arkad, 3 försök</button>
+      </div>
+      <ul class="how">
+        <li>Flytta med piltangenterna eller WASD. På pekskärm sveper du eller använder styrkorset.</li>
+        <li>Gå rakt in i en vägg för att knuffa den ett steg. Det går bara om rutan bakom är fri.</li>
+        <li>Nå en bomb innan stubinen brunnit ner. I rullande banor får du inte bli klämd mot högerkanten.</li>
+      </ul>
+      <div class="foot" id="titleFoot">120 banor i 10 världar · R börjar om · Z ångrar · M ljud</div>
+    </div>
+  </section>
+
+  <section id="select" class="screen" hidden>
+    <div class="shead">
+      <button class="ib" id="btnBack" aria-label="Tillbaka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Banor</h2>
+      <span class="tot" id="selTotal"></span>
+    </div>
+    <div class="worlds" id="worlds"></div>
+    <div class="sfoot">
+      <span>Ju mer stubin du har kvar i mål, desto fler stjärnor. Medaljen får du om du klarar banan på minsta möjliga antal knuffar.</span>
+      <label><input type="checkbox" id="chkAll"> Lås upp alla banor</label>
+    </div>
+  </section>
+
+  <section id="overlay" class="screen" hidden><div class="card" id="card"></div></section>
+</div>
+<script>
+/*__SCRIPT__*/
+</script>
+</body>
+</html>

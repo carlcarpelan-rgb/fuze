@@ -1,0 +1,348 @@
+/* ===== Saving, sound, input, menus, main loop ===== */
+const $ = id => document.getElementById(id);
+const app = $('app');
+const IS_TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+const ICON = {
+  star: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2l2.9 6.2 6.8.8-5 4.7 1.3 6.7L12 17.3l-6 3.3 1.3-6.7-5-4.7 6.8-.8z"/></svg>',
+  lock: '<svg class="lock" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.500V20a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 20v-8.500A1.500 1.500 0 0 1 5.500 10zm2.500 0h5V7a2.500 2.500 0 0 0-5 0z"/></svg>',
+  medal: '<svg class="md" viewBox="0 0 24 24"><path d="M7 2h4l2 6h-4zM13 2h4l-2 6h-4z" fill="#3f7fb8"/><circle cx="12" cy="15" r="7" fill="currentColor"/><circle cx="12" cy="15" r="4.6" fill="none" stroke="rgba(0,0,0,.28)" stroke-width="1.4"/><path d="M10 15.2l1.4 1.4 2.8-3" fill="none" stroke="#0b2233" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  scroll: '<svg class="sc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l6 6-6 6M13 6l6 6-6 6"/></svg>',
+  on: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.500h3.500L12 5.500v13l-4.500-4H4z" fill="currentColor"/><path d="M15.500 9a4.200 4.200 0 0 1 0 6M18 6.500a8 8 0 0 1 0 11"/></svg>',
+  off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.500h3.500L12 5.500v13l-4.500-4H4z" fill="currentColor"/><path d="M16 9.500l5 5M21 9.500l-5 5"/></svg>'
+};
+const fmt = t => (Math.max(0, t)).toFixed(1).replace('.', ',');
+
+/* ---------- save (this browser only) ---------- */
+const Save = {
+  d: { stars: {}, medal: {}, all: false, mute: false, hi: 0 },
+  load() { try { const s = localStorage.getItem('stubin.v1'); if (s) Object.assign(this.d, JSON.parse(s)); } catch (e) { /* storage may be unavailable */ } if (!this.d.medal) this.d.medal = {}; },
+  put() { try { localStorage.setItem('stubin.v1', JSON.stringify(this.d)); } catch (e) { /* keep playing without it */ } }
+};
+const starsOf = i => Save.d.stars[i] | 0;
+const isOpen = i => Save.d.all || i === 0 || starsOf(i - 1) > 0 || starsOf(i) > 0;
+function nextIdx() { for (let i = 0; i < LEVELS.length; i++) if (!starsOf(i)) return i; return 0; }
+const hasMedal = i => !!Save.d.medal[i];
+function totalMedals() { let n = 0; for (let i = 0; i < LEVELS.length; i++) if (hasMedal(i)) n++; return n; }
+const parCount = () => LEVELS.filter(l => l.p).length;
+function totalStars() { let n = 0; for (let i = 0; i < LEVELS.length; i++) n += starsOf(i); return n; }
+
+/* ---------- sound: everything is synthesised ---------- */
+const Snd = {
+  ac: null, out: null, nz: null,
+  init() {
+    if (this.ac) { if (this.ac.state === 'suspended') this.ac.resume().catch(() => {}); return; }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      this.ac = new AC(); this.out = this.ac.createGain(); this.out.gain.value = Save.d.mute ? 0 : .55; this.out.connect(this.ac.destination);
+      const n = this.ac.sampleRate, buf = this.ac.createBuffer(1, n, n), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      this.nz = buf;
+    } catch (e) { this.ac = null; }
+  },
+  setMute(m) { Save.d.mute = m; Save.put(); if (this.out) this.out.gain.value = m ? 0 : .55; $('btnSound').innerHTML = m ? ICON.off : ICON.on; },
+  tone(f, dur, type, vol, to, when) {
+    const ac = this.ac; if (!ac || Save.d.mute) return;
+    try {
+      const t = ac.currentTime + (when || 0), o = ac.createOscillator(), g = ac.createGain();
+      o.type = type || 'square'; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.out); o.start(t); o.stop(t + dur + .03);
+    } catch (e) { /* ignore */ }
+  },
+  noise(dur, vol, f0, f1, type, when) {
+    const ac = this.ac; if (!ac || !this.nz || Save.d.mute) return;
+    try {
+      const t = ac.currentTime + (when || 0), s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+      s.buffer = this.nz; s.loop = true; fl.type = type || 'lowpass'; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(fl); fl.connect(g); g.connect(this.out); s.start(t, Math.random() * .5); s.stop(t + dur + .03);
+    } catch (e) { /* ignore */ }
+  },
+  step() { this.noise(.05, .1, 2400, 900, 'bandpass'); },
+  push() { this.noise(.2, .4, 700, 110); this.tone(95, .14, 'sine', .3, 55); },
+  bump() { this.tone(120, .08, 'square', .1, 70); this.noise(.05, .12, 400, 150); },
+  land() { this.noise(.12, .25, 500, 120); this.tone(160, .1, 'sine', .2, 70); },
+  beep(hi) { this.tone(hi ? 1480 : 990, .07, 'square', .1); },
+  tick() { this.tone(64, .07, 'sine', .22, 44); this.noise(.06, .06, 300, 120); },
+  undo() { this.tone(520, .07, 'triangle', .12, 330); },
+  click() { this.tone(700, .04, 'triangle', .12, 900); },
+  star(i) { this.tone([784, 988, 1319][i] || 784, .22, 'triangle', .2, null, .12 + i * .18); },
+  win() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, .16, 'triangle', .22, null, i * .085)); this.noise(.25, .12, 6000, 2000, 'highpass'); },
+  boom() { this.noise(1.3, .95, 1800, 50); this.tone(130, 1.0, 'sine', .7, 28); this.noise(.12, .6, 5000, 800, 'highpass'); },
+  clank() { this.tone(330, .06, 'square', .08, 250); this.tone(1250, .05, 'triangle', .05); },
+  slide(n) { this.noise(.08 + n * .07, .22, 5200, 1400, 'bandpass'); this.tone(1800, .05 + n * .05, 'sine', .04, 900); },
+  thud() { this.noise(.22, .45, 420, 60); this.tone(70, .2, 'sine', .35, 38); },
+  medal() { [880, 1175, 1568].forEach((f, i) => this.tone(f, .2, 'triangle', .16, null, .75 + i * .09)); },
+  squash() { this.noise(.3, .6, 900, 80); this.tone(220, .25, 'sawtooth', .22, 50); }
+};
+
+/* ---------- input ---------- */
+const Input = {
+  held: [], queue: [], t0: 0,
+  press(d) { if (!this.held.includes(d)) this.held.push(d); this.t0 = performance.now(); this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
+  release(d) { const i = this.held.indexOf(d); if (i >= 0) this.held.splice(i, 1); },
+  tap(d) { this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
+  clear() { this.held.length = 0; this.queue.length = 0; }
+};
+const KEYDIR = { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, w: 0, s: 1, a: 2, d: 3, W: 0, S: 1, A: 2, D: 3 };
+
+window.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  Snd.init();
+  const k = e.key;
+  const overlayOpen = !$('overlay').hidden;
+  if (k in KEYDIR && !overlayOpen && (G.mode === 'play' || G.mode === 'intro')) { e.preventDefault(); if (!e.repeat) Input.press(KEYDIR[k]); return; }
+  if (e.repeat) return;
+  if (overlayOpen) {
+    if (k === 'Enter' || k === ' ') { e.preventDefault(); const b = document.querySelector('#card .btn.primary'); if (b) b.click(); }
+    else if (k === 'Escape') { e.preventDefault(); const b = document.querySelector('#card [data-esc]'); if (b) b.click(); }
+    else if (k === 'r' || k === 'R') { const b = document.querySelector('#card [data-retry]'); if (b) b.click(); }
+    return;
+  }
+  if (G.mode === 'play' || G.mode === 'intro') {
+    if (k === 'r' || k === 'R') restart();
+    else if (k === 'z' || k === 'Z' || k === 'u' || k === 'U' || k === 'Backspace') { e.preventDefault(); undo(); }
+    else if (k === 'Escape' || k === 'p' || k === 'P') pause();
+    else if (k === 'm' || k === 'M') Snd.setMute(!Save.d.mute);
+    return;
+  }
+  if (!$('title').hidden && (k === 'Enter' || k === ' ')) { e.preventDefault(); $('btnPlay').click(); }
+  else if (!$('select').hidden && k === 'Escape') showTitle();
+});
+window.addEventListener('keyup', e => { if (e.key in KEYDIR) Input.release(KEYDIR[e.key]); });
+window.addEventListener('blur', () => { Input.clear(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { Input.clear(); pause(); } });
+
+// swipe on the board
+let sw = null;
+stageEl.addEventListener('pointerdown', e => { Snd.init(); if (e.pointerType === 'mouse' || e.target.closest('#pad')) return; sw = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+stageEl.addEventListener('pointermove', e => {
+  if (!sw || e.pointerId !== sw.id) return;
+  const dx = e.clientX - sw.x, dy = e.clientY - sw.y, th = 26;
+  if (Math.abs(dx) < th && Math.abs(dy) < th) return;
+  Input.tap(Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 0 : 1));
+  sw.x = e.clientX; sw.y = e.clientY;
+});
+const swEnd = e => { if (sw && e.pointerId === sw.id) sw = null; };
+stageEl.addEventListener('pointerup', swEnd); stageEl.addEventListener('pointercancel', swEnd);
+document.querySelectorAll('#pad button').forEach(b => {
+  const d = +b.dataset.d;
+  const up = () => { b.classList.remove('dn'); Input.release(d); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); Snd.init(); b.classList.add('dn'); Input.press(d); try { b.setPointerCapture(e.pointerId); } catch (er) { /* fine */ } });
+  b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+/* ---------- screens ---------- */
+function onPush() {
+  $('hudPushN').textContent = G.pushes;
+  const par = G.L.par;
+  $('hudPush').classList.toggle('over', !!par && G.pushes > par);
+}
+function setHud() {
+  const wi = Math.floor(G.idx / 12);
+  $('hudWorld').textContent = THEMES[wi].name + (G.st.scroll && G.st.cam > 0 ? ' · ' + G.st.cam + ' kvar' : '');
+  $('hudLevel').textContent = 'Bana ' + (G.idx + 1);
+  app.style.setProperty('--acc', G.theme.accent);
+  $('btnUndo').hidden = G.st.scroll;
+  $('hudPush').hidden = G.st.scroll;
+  $('hudPar').textContent = G.L.par ? 'rekord ' + G.L.par : '';
+  onPush();
+  $('btnRestart').hidden = !!G.arcade;
+  $('hudArc').hidden = !G.arcade;
+  if (G.arcade) {
+    $('hudScore').textContent = G.arcade.score;
+    $('hudMiss').querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < G.arcade.misses));
+  }
+}
+function onTick() { $('hudWorld').textContent = G.theme.name + (G.st.cam > 0 ? ' · ' + G.st.cam + ' kvar' : ' · framme'); }
+let hintTimer = 0;
+function showHint(text, ms) {
+  const el = $('hint');
+  clearTimeout(hintTimer);
+  if (!text) { el.classList.add('off'); return; }
+  el.textContent = text; el.classList.remove('off');
+  hintTimer = setTimeout(() => el.classList.add('off'), ms || 9000);
+}
+let firstMulti = -1, firstScroll = -1, firstX = -1, firstO = -1, firstI = -1;
+function hintFor(i) {
+  if (firstMulti < 0) {
+    LEVELS.forEach((lv, k) => {
+      if (firstMulti < 0 && (lv.m.split('B').length - 1) > 1) firstMulti = k;
+      if (firstScroll < 0 && lv.s) firstScroll = k;
+      if (firstX < 0 && lv.m.includes('X')) firstX = k;
+      if (firstO < 0 && lv.m.includes('O')) firstO = k;
+      if (firstI < 0 && lv.m.includes('I')) firstI = k;
+    });
+  }
+  const world = i % 12 === 0 && i ? 'Värld ' + (i / 12 + 1) + ', ' + THEMES[i / 12].name + '. ' : '';
+  if (i === 0) return (IS_TOUCH ? 'Svep eller använd styrkorset. ' : 'Piltangenter eller WASD. ') + 'Vägen till bomben är stängd: gå rakt in i en vägg för att knuffa den. Det går bara om rutan bakom är fri.';
+  if (i === 1) return IS_TOUCH ? 'Kör du fast? Pilen uppe till höger ångrar ett steg.' : 'Kör du fast? Z ångrar ett steg och R börjar om banan.';
+  if (i === 2) return 'Uppe till vänster ser du dina knuffar och banans rekord. Klarar du banan på rekordet får du en medalj.';
+  if (i === firstX) return world + 'Nytt: mörka järnblock sitter fast. De går inte att knuffa.';
+  if (i === firstO) return world + 'Nytt: hål i golvet. Du kan inte gå över dem, men knuffar du ner ett block blir hålet fyllt.';
+  if (i === firstI) return world + 'Nytt: isblock glider tills de slår i något. Glider de över ett hål fyller de det.';
+  if (i === firstScroll) return 'Bossbana! Labyrinten rullar in från vänster. Hitta dörren i varje pelarvägg och knuffa dig igenom innan du blir klämd mot högerkanten.';
+  if (i === firstMulti) return 'Flera bomber. Det räcker att nå en av dem.';
+  if (world) return world + THEMES[i / 12].sub + '.';
+  if (LEVELS[i].s) return i % 12 === 11 ? 'Världens slutboss. Snabbare rullning och fler pelarväggar.' : 'Bossbana. Välj dörr i tid, och välj rätt.';
+  return '';
+}
+
+function hideScreens() { $('title').hidden = true; $('select').hidden = true; $('overlay').hidden = true; }
+function startLevel(i) {
+  Snd.init();
+  hideScreens();
+  $('hud').hidden = false; app.classList.add('playing');
+  Input.clear();
+  loadLevel(i);
+  G.mode = 'intro';
+  setHud();
+  showHint(hintFor(i));
+  requestAnimationFrame(() => layout(true));
+}
+function restart() { if (G.mode === 'title' || G.arcade) return; const keepHint = !$('hint').classList.contains('off'); startLevel(G.idx); if (!keepHint) showHint(''); }
+function showTitle() {
+  hideScreens(); $('title').hidden = false; $('hud').hidden = true; app.classList.remove('playing'); showHint('');
+  G.arcade = null;
+  const n = nextIdx();
+  loadLevel(n); G.mode = 'title';
+  app.style.setProperty('--acc', G.theme.accent);
+  const any = totalStars() > 0;
+  $('btnPlay').textContent = any ? 'Fortsätt på bana ' + (n + 1) : 'Spela';
+  $('titleFoot').textContent = LEVELS.length + ' banor i 10 världar · R börjar om · Z ångrar · M ljud' + (Save.d.hi ? ' · Arkadrekord ' + Save.d.hi : '');
+  requestAnimationFrame(() => layout(true));
+}
+function showSelect() {
+  hideScreens(); $('select').hidden = false; $('hud').hidden = true; app.classList.remove('playing'); showHint('');
+  if (G.mode !== 'title') { G.arcade = null; G.mode = 'title'; }
+  const nx = nextIdx();
+  let html = '';
+  for (let w = 0; w < LEVELS.length / 12; w++) {
+    const th = THEMES[w]; let got = 0, cells = '';
+    for (let k = 0; k < 12; k++) {
+      const i = w * 12 + k, st = starsOf(i), open = isOpen(i); got += st;
+      const cls = 'lv' + (open ? '' : ' locked') + (st ? ' done' : '') + (open && i === nx ? ' next' : '');
+      let stars = ''; for (let q = 0; q < 3; q++) stars += ICON.star.replace('<svg', '<svg' + (q < st ? ' class="on"' : ''));
+      cells += '<button class="' + cls + '" data-i="' + i + '"' + (open ? '' : ' disabled') + ' aria-label="Bana ' + (i + 1) + (LEVELS[i].s ? ', bossbana' : '') + (open ? '' : ', låst') + '">' +
+        (LEVELS[i].s ? ICON.scroll : '') + (hasMedal(i) ? ICON.medal : '') + '<span class="n">' + (i + 1) + '</span>' + (open ? '<span class="st">' + stars + '</span>' : ICON.lock) + '</button>';
+    }
+    html += '<section class="world" style="--acc:' + th.accent + '"><header><small>Värld ' + (w + 1) + '</small><h3>' + th.name + '</h3><em>' + th.sub + '</em><b>' + got + ' / 36</b></header><div class="lgrid">' + cells + '</div></section>';
+  }
+  $('worlds').innerHTML = html;
+  $('selTotal').innerHTML = ICON.star + totalStars() + ' / ' + LEVELS.length * 3 + '<span class="sep"></span>' + ICON.medal + totalMedals() + ' / ' + parCount();
+  $('chkAll').checked = !!Save.d.all;
+  const cur = $('worlds').querySelector('.lv.next');
+  if (cur) cur.scrollIntoView({ block: 'center' });
+}
+$('worlds').addEventListener('click', e => {
+  const b = e.target.closest('.lv'); if (!b || b.disabled) return;
+  Snd.init(); Snd.click(); G.arcade = null; startLevel(+b.dataset.i);
+});
+$('chkAll').addEventListener('change', e => { Save.d.all = e.target.checked; Save.put(); showSelect(); });
+$('btnBack').addEventListener('click', () => { Snd.click(); showTitle(); });
+$('btnPlay').addEventListener('click', () => { Snd.init(); Snd.click(); G.arcade = null; startLevel(nextIdx()); });
+$('btnSelect').addEventListener('click', () => { Snd.init(); Snd.click(); showSelect(); });
+$('btnArcade').addEventListener('click', () => { Snd.init(); Snd.click(); G.arcade = { score: 0, misses: 0 }; startLevel(0); });
+$('btnPause').addEventListener('click', () => { Snd.click(); pause(); });
+$('btnUndo').addEventListener('click', () => { undo(); });
+$('btnRestart').addEventListener('click', () => { Snd.click(); restart(); });
+$('btnSound').addEventListener('click', () => { Snd.init(); Snd.setMute(!Save.d.mute); Snd.click(); });
+
+function panel(o) {
+  let h = '';
+  if (o.kick) h += '<div class="kick">' + o.kick + '</div>';
+  h += '<h2 class="' + (o.cls || '') + '">' + o.title + '</h2>';
+  if (o.stars != null) { h += '<div class="stars">'; for (let q = 0; q < 3; q++) h += ICON.star.replace('<svg', '<svg' + (q < o.stars ? ' class="on"' : '')); h += '</div>'; }
+  if (o.body) h += '<p>' + o.body + '</p>';
+  if (o.push) h += o.push;
+  h += '<div class="cbtns">';
+  o.btns.forEach((b, i) => {
+    if (i === 1 && o.btns.length > 2) h += '<div class="row">';
+    h += '<button class="btn' + (b.primary ? ' primary' : '') + '" data-k="' + i + '"' + (b.esc ? ' data-esc' : '') + (b.retry ? ' data-retry' : '') + '>' + b.label + '</button>';
+    if (i === o.btns.length - 1 && o.btns.length > 2) h += '</div>';
+  });
+  h += '</div>';
+  const card = $('card'); card.innerHTML = h;
+  card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
+  card.onclick = e => { const b = e.target.closest('.btn'); if (!b) return; Snd.init(); Snd.click(); o.btns[+b.dataset.k].go(); };
+  $('overlay').hidden = false;
+  Input.clear();
+}
+function pause() {
+  if (G.mode !== 'play' && G.mode !== 'intro') return;
+  G.resume = G.mode; G.mode = 'paused';
+  panel({ kick: THEMES[Math.floor(G.idx / 12)].name + ' · bana ' + (G.idx + 1), title: 'Paus', body: 'Stubinen står still så länge.',
+    btns: [{ label: 'Fortsätt', primary: true, esc: true, go: () => { $('overlay').hidden = true; G.mode = G.resume; } },
+      G.arcade ? { label: 'Avsluta omgången', go: () => arcadeOver(false) } : { label: 'Börja om', retry: true, go: () => startLevel(G.idx) }].concat(G.arcade ? [] : [{ label: 'Banor', go: showSelect }]) });
+}
+function onWin() {
+  G.medal = !!G.L.par && G.pushes <= G.L.par;
+  G.newMedal = G.medal && !hasMedal(G.idx);
+  if (G.arcade) { G.arcade.gain = Math.round(G.timeLeft * 10) + 50 + (G.medal ? 100 : 0); G.arcade.score += G.arcade.gain; setHud(); }
+  else {
+    if (G.stars > starsOf(G.idx)) Save.d.stars[G.idx] = G.stars;
+    if (G.medal) Save.d.medal[G.idx] = 1;
+    Save.put();
+  }
+}
+function onLose() { if (G.arcade) { G.arcade.misses++; setHud(); } }
+function pushLine() {
+  if (!G.L.par) return '';
+  if (G.medal) return '<div class="pushres good">' + ICON.medal + '<span><b>' + G.pushes + ' knuffar</b>, samma som rekordet.' + (G.newMedal ? ' Ny medalj!' : '') + '</span></div>';
+  return '<div class="pushres">' + ICON.medal + '<span><b>' + G.pushes + ' knuffar</b>. Rekordet är ' + G.L.par + '. Spela igen för medaljen.</span></div>';
+}
+function showResult() {
+  const i = G.idx, last = i === LEVELS.length - 1, kick = THEMES[Math.floor(i / 12)].name + ' · bana ' + (i + 1);
+  showHint('');
+  if (G.mode === 'won') {
+    for (let q = 0; q < G.stars; q++) Snd.star(q);
+    if (G.medal) Snd.medal();
+    if (G.arcade) {
+      if (last) return arcadeOver(true);
+      return panel({ kick, title: 'Desarmerad', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>+' + G.arcade.gain + '</b> poäng' + (G.medal ? ', varav 100 för rekordet' : '') + '. Totalt <b>' + G.arcade.score + '</b>.',
+        btns: [{ label: 'Nästa bana', primary: true, go: () => startLevel(i + 1) }, { label: 'Avsluta', esc: true, go: () => arcadeOver(false) }] });
+    }
+    if (last) return panel({ kick: 'Alla ' + LEVELS.length + ' banor klara', title: 'Staden är säker', cls: 'good', stars: G.stars, body: 'Du har ' + totalStars() + ' av ' + LEVELS.length * 3 + ' stjärnor. Banor med färre än tre går att spela om.',
+      btns: [{ label: 'Till banorna', primary: true, esc: true, go: showSelect }, { label: 'Spela igen', retry: true, go: () => startLevel(i) }] });
+    const newWorld = (i + 1) % 12 === 0;
+    return panel({ kick, title: 'Desarmerad', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>' + fmt(G.timeLeft) + ' s</b> kvar på stubinen.' + (newWorld ? ' Nästa värld: ' + THEMES[(i + 1) / 12].name + '.' : ''),
+      btns: [{ label: 'Nästa bana', primary: true, go: () => startLevel(i + 1) }, { label: 'Spela igen', retry: true, go: () => startLevel(i) }, { label: 'Banor', esc: true, go: showSelect }] });
+  }
+  const sq = G.loseKind === 'squash';
+  if (G.arcade && G.arcade.misses >= 3) return arcadeOver(false);
+  panel({ kick, title: sq ? 'Klämd' : 'Pang', cls: 'bad', body: (sq ? 'Väggarna tryckte dig mot högerkanten.' : 'Stubinen brann ner innan du hann fram.') + (G.arcade ? ' Miss ' + G.arcade.misses + ' av 3.' : ''),
+    btns: [{ label: 'Försök igen', primary: true, retry: true, go: () => startLevel(i) }, G.arcade ? { label: 'Avsluta', esc: true, go: () => arcadeOver(false) } : { label: 'Banor', esc: true, go: showSelect }] });
+}
+function arcadeOver(all) {
+  const sc = G.arcade.score, best = sc > (Save.d.hi | 0);
+  if (best) { Save.d.hi = sc; Save.put(); }
+  panel({ kick: 'Arkad', title: all ? 'Alla banor klara' : 'Slut på försök', cls: all ? 'good' : 'bad', body: 'Du kom till bana <b>' + (G.idx + 1) + '</b> med <b>' + sc + '</b> poäng.' + (best && sc ? ' Nytt rekord.' : Save.d.hi ? ' Rekordet är ' + Save.d.hi + '.' : ''),
+    btns: [{ label: 'Ny omgång', primary: true, go: () => { G.arcade = { score: 0, misses: 0 }; startLevel(0); } }, { label: 'Till menyn', esc: true, go: showTitle }] });
+}
+
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.blur(); });
+
+/* ---------- main loop ---------- */
+let lastT = 0, lastFuse = -1, lastTxt = '';
+function frame(t) {
+  requestAnimationFrame(frame);
+  let dt = (t - lastT) / 1000; lastT = t;
+  if (!(dt > 0)) return; if (dt > .05) dt = .05;
+  if (G.mode !== 'paused') update(dt);
+  render();
+  if (!$('hud').hidden) {
+    const r = clamp(G.timeLeft / G.time, 0, 1), rr2 = Math.round(r * 500) / 500;
+    if (rr2 !== lastFuse) { lastFuse = rr2; $('fuse').style.setProperty('--r', rr2); }
+    const tx = fmt(G.timeLeft);
+    if (tx !== lastTxt) { lastTxt = tx; $('hudTime').textContent = tx; $('fuse').classList.toggle('urgent', G.timeLeft < 10 && G.mode === 'play'); }
+  }
+}
+if (window.ResizeObserver) new ResizeObserver(() => layout()).observe(stageEl);
+window.addEventListener('resize', () => layout());
+Save.load();
+$('btnSound').innerHTML = Save.d.mute ? ICON.off : ICON.on;
+showTitle();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout());
+requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
+window.__stubin = { G, V, Save, startLevel, showSelect, showTitle, Rules, Input, doMove, update, LEVELS };
