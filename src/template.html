@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Stubin</title>
+<title>Fuze</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -189,19 +189,19 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
 <body>
 <div id="app">
   <header id="hud" hidden>
-    <button class="ib" id="btnPause" aria-label="Paus" title="Paus (Esc)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
-    <div class="lvl"><span id="hudWorld">Kloakerna</span><strong id="hudLevel">Bana 1</strong></div>
-    <div class="pushc" id="hudPush" title="Knuffar du har gjort, och minsta möjliga för banan"><span>Knuffar</span><strong><b id="hudPushN">0</b> <i id="hudPar"></i></strong></div>
-    <div class="fuse" id="fuse" role="timer" aria-label="Tid kvar">
+    <button class="ib" id="btnPause" aria-label="Pause" title="Pause (Esc)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
+    <div class="lvl"><span id="hudWorld">The Sewers</span><strong id="hudLevel">Level 1</strong></div>
+    <div class="pushc" id="hudPush" title="Pushes you have made, and the fewest possible for this level"><span>Pushes</span><strong><b id="hudPushN">0</b> <i id="hudPar"></i></strong></div>
+    <div class="fuse" id="fuse" role="timer" aria-label="Time left">
       <div class="rope"><i class="burnt"></i><i class="spark"></i></div>
       <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="15" cy="19" r="10" fill="#1b1f27" stroke="#000" stroke-width="1.5"/><path d="M9 16a7 7 0 0 1 4-4" stroke="#8b94a3" stroke-width="2" fill="none" stroke-linecap="round"/><rect x="12" y="6" width="6" height="4" rx="1" fill="#9aa3b2"/></svg>
       <b id="hudTime">0,0</b>
     </div>
-    <div class="arc" id="hudArc" hidden><span>Poäng</span><strong id="hudScore">0</strong><span class="miss" id="hudMiss" aria-label="Missar"><i></i><i></i><i></i></span></div>
+    <div class="arc" id="hudArc" hidden><span>Score</span><strong id="hudScore">0</strong><span class="miss" id="hudMiss" aria-label="Misses"><i></i><i></i><i></i></span></div>
     <div class="acts">
-      <button class="ib" id="btnUndo" aria-label="Ångra" title="Ångra (Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-      <button class="ib" id="btnRestart" aria-label="Börja om" title="Börja om (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
-      <button class="ib" id="btnSound" aria-label="Ljud av eller på" title="Ljud (M)"></button>
+      <button class="ib" id="btnUndo" aria-label="Undo" title="Undo (Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="ib" id="btnRestart" aria-label="Restart" title="Restart (R)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
+      <button class="ib" id="btnSound" aria-label="Sound on or off" title="Sound (M)"></button>
     </div>
   </header>
   <div id="stage">
@@ -217,36 +217,36 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
 
   <section id="title" class="screen">
     <div class="tcol">
-      <div class="kick">Knuffa väggar · Hinn före gnistan</div>
+      <div class="kick">Push walls · Beat the spark</div>
       <div>
-        <h1>STUBIN</h1>
+        <h1>FUZE</h1>
         <div class="wick"></div>
       </div>
-      <p class="tag">Någon har gömt bomber i tunnlarna under staden. Du har en labyrint, en brinnande stubin och två händer att knuffa med.</p>
+      <p class="tag">Someone has hidden bombs in the tunnels under the city. You have a maze, a burning fuse and two hands to push with.</p>
       <div class="tbtns">
-        <button class="btn primary" id="btnPlay">Spela</button>
-        <button class="btn" id="btnSelect">Välj bana</button>
-        <button class="btn" id="btnArcade">Arkad, 3 försök</button>
+        <button class="btn primary" id="btnPlay">Play</button>
+        <button class="btn" id="btnSelect">Choose level</button>
+        <button class="btn" id="btnArcade">Arcade, 3 tries</button>
       </div>
       <ul class="how">
-        <li>Flytta med piltangenterna eller WASD. På pekskärm sveper du eller använder styrkorset.</li>
-        <li>Gå rakt in i en vägg för att knuffa den ett steg. Det går bara om rutan bakom är fri.</li>
-        <li>Nå en bomb innan stubinen brunnit ner. I rullande banor får du inte bli klämd mot högerkanten.</li>
+        <li>Move with the arrow keys or WASD. On a touch screen, swipe or use the d-pad.</li>
+        <li>Walk straight into a wall to push it one square. It only moves if the square behind it is free.</li>
+        <li>Reach a bomb before the fuse burns down. On boss levels the maze rolls in, so do not get crushed against the right edge.</li>
       </ul>
-      <div class="foot" id="titleFoot">120 banor i 10 världar · R börjar om · Z ångrar · M ljud</div>
+      <div class="foot" id="titleFoot">120 levels in 10 worlds · R restart · Z undo · M sound</div>
     </div>
   </section>
 
   <section id="select" class="screen" hidden>
     <div class="shead">
-      <button class="ib" id="btnBack" aria-label="Tillbaka"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <h2>Banor</h2>
+      <button class="ib" id="btnBack" aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2>Levels</h2>
       <span class="tot" id="selTotal"></span>
     </div>
     <div class="worlds" id="worlds"></div>
     <div class="sfoot">
-      <span>Ju mer stubin du har kvar i mål, desto fler stjärnor. Medaljen får du om du klarar banan på minsta möjliga antal knuffar.</span>
-      <label><input type="checkbox" id="chkAll"> Lås upp alla banor</label>
+      <span>The more fuse you have left, the more stars you get. Clear a level in the fewest possible pushes to earn its medal.</span>
+      <label><input type="checkbox" id="chkAll"> Unlock all levels</label>
     </div>
   </section>
 

@@ -10,7 +10,7 @@ const ICON = {
   on: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.500h3.500L12 5.500v13l-4.500-4H4z" fill="currentColor"/><path d="M15.500 9a4.200 4.200 0 0 1 0 6M18 6.500a8 8 0 0 1 0 11"/></svg>',
   off: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.500h3.500L12 5.500v13l-4.500-4H4z" fill="currentColor"/><path d="M16 9.500l5 5M21 9.500l-5 5"/></svg>'
 };
-const fmt = t => (Math.max(0, t)).toFixed(1).replace('.', ',');
+const fmt = t => (Math.max(0, t)).toFixed(1);
 
 /* ---------- save (this browser only) ---------- */
 const Save = {
@@ -141,12 +141,12 @@ function onPush() {
 }
 function setHud() {
   const wi = Math.floor(G.idx / 12);
-  $('hudWorld').textContent = THEMES[wi].name + (G.st.scroll && G.st.cam > 0 ? ' · ' + G.st.cam + ' kvar' : '');
-  $('hudLevel').textContent = 'Bana ' + (G.idx + 1);
+  $('hudWorld').textContent = THEMES[wi].name + (G.st.scroll && G.st.cam > 0 ? ' · ' + G.st.cam + ' to go' : '');
+  $('hudLevel').textContent = 'Level ' + (G.idx + 1);
   app.style.setProperty('--acc', G.theme.accent);
   $('btnUndo').hidden = G.st.scroll;
   $('hudPush').hidden = G.st.scroll;
-  $('hudPar').textContent = G.L.par ? 'rekord ' + G.L.par : '';
+  $('hudPar').textContent = G.L.par ? 'best ' + G.L.par : '';
   onPush();
   $('btnRestart').hidden = !!G.arcade;
   $('hudArc').hidden = !G.arcade;
@@ -155,7 +155,7 @@ function setHud() {
     $('hudMiss').querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < G.arcade.misses));
   }
 }
-function onTick() { $('hudWorld').textContent = G.theme.name + (G.st.cam > 0 ? ' · ' + G.st.cam + ' kvar' : ' · framme'); }
+function onTick() { $('hudWorld').textContent = G.theme.name + (G.st.cam > 0 ? ' · ' + G.st.cam + ' to go' : ' · arrived'); }
 let hintTimer = 0;
 function showHint(text, ms) {
   const el = $('hint');
@@ -175,17 +175,17 @@ function hintFor(i) {
       if (firstI < 0 && lv.m.includes('I')) firstI = k;
     });
   }
-  const world = i % 12 === 0 && i ? 'Värld ' + (i / 12 + 1) + ', ' + THEMES[i / 12].name + '. ' : '';
-  if (i === 0) return (IS_TOUCH ? 'Svep eller använd styrkorset. ' : 'Piltangenter eller WASD. ') + 'Vägen till bomben är stängd: gå rakt in i en vägg för att knuffa den. Det går bara om rutan bakom är fri.';
-  if (i === 1) return IS_TOUCH ? 'Kör du fast? Pilen uppe till höger ångrar ett steg.' : 'Kör du fast? Z ångrar ett steg och R börjar om banan.';
-  if (i === 2) return 'Uppe till vänster ser du dina knuffar och banans rekord. Klarar du banan på rekordet får du en medalj.';
-  if (i === firstX) return world + 'Nytt: mörka järnblock sitter fast. De går inte att knuffa.';
-  if (i === firstO) return world + 'Nytt: hål i golvet. Du kan inte gå över dem, men knuffar du ner ett block blir hålet fyllt.';
-  if (i === firstI) return world + 'Nytt: isblock glider tills de slår i något. Glider de över ett hål fyller de det.';
-  if (i === firstScroll) return 'Bossbana! Labyrinten rullar in från vänster. Hitta dörren i varje pelarvägg och knuffa dig igenom innan du blir klämd mot högerkanten.';
-  if (i === firstMulti) return 'Flera bomber. Det räcker att nå en av dem.';
+  const world = i % 12 === 0 && i ? 'World ' + (i / 12 + 1) + ', ' + THEMES[i / 12].name + '. ' : '';
+  if (i === 0) return (IS_TOUCH ? 'Swipe or use the d-pad. ' : 'Arrow keys or WASD. ') + 'The way to the bomb is blocked: walk straight into a wall to push it. It only moves if the square behind it is free.';
+  if (i === 1) return IS_TOUCH ? 'Stuck? The arrow at the top right undoes a move.' : 'Stuck? Z undoes a move and R restarts the level.';
+  if (i === 2) return 'Top left shows your pushes and the fewest possible. Match that number to earn a medal.';
+  if (i === firstX) return world + 'New: dark iron blocks are bolted down. They cannot be pushed.';
+  if (i === firstO) return world + 'New: holes in the floor. You cannot cross them, but push a block in and the hole is filled.';
+  if (i === firstI) return world + 'New: ice blocks slide until they hit something. If one slides into a hole, it fills it.';
+  if (i === firstScroll) return 'Boss level! The maze rolls in from the left. Find the door in each iron wall and push through before you are crushed against the right edge.';
+  if (i === firstMulti) return 'Several bombs. Reaching any one of them is enough.';
   if (world) return world + THEMES[i / 12].sub + '.';
-  if (LEVELS[i].s) return i % 12 === 11 ? 'Världens slutboss. Snabbare rullning och fler pelarväggar.' : 'Bossbana. Välj dörr i tid, och välj rätt.';
+  if (LEVELS[i].s) return i % 12 === 11 ? 'Final boss of the world. Faster rolling and more iron walls.' : 'Boss level. Pick a door in time, and pick the right one.';
   return '';
 }
 
@@ -209,8 +209,8 @@ function showTitle() {
   loadLevel(n); G.mode = 'title';
   app.style.setProperty('--acc', G.theme.accent);
   const any = totalStars() > 0;
-  $('btnPlay').textContent = any ? 'Fortsätt på bana ' + (n + 1) : 'Spela';
-  $('titleFoot').textContent = LEVELS.length + ' banor i 10 världar · R börjar om · Z ångrar · M ljud' + (Save.d.hi ? ' · Arkadrekord ' + Save.d.hi : '');
+  $('btnPlay').textContent = any ? 'Continue at level ' + (n + 1) : 'Play';
+  $('titleFoot').textContent = LEVELS.length + ' levels in 10 worlds · R restart · Z undo · M sound' + (Save.d.hi ? ' · Arcade best ' + Save.d.hi : '');
   requestAnimationFrame(() => layout(true));
 }
 function showSelect() {
@@ -224,10 +224,10 @@ function showSelect() {
       const i = w * 12 + k, st = starsOf(i), open = isOpen(i); got += st;
       const cls = 'lv' + (open ? '' : ' locked') + (st ? ' done' : '') + (open && i === nx ? ' next' : '');
       let stars = ''; for (let q = 0; q < 3; q++) stars += ICON.star.replace('<svg', '<svg' + (q < st ? ' class="on"' : ''));
-      cells += '<button class="' + cls + '" data-i="' + i + '"' + (open ? '' : ' disabled') + ' aria-label="Bana ' + (i + 1) + (LEVELS[i].s ? ', bossbana' : '') + (open ? '' : ', låst') + '">' +
+      cells += '<button class="' + cls + '" data-i="' + i + '"' + (open ? '' : ' disabled') + ' aria-label="Level ' + (i + 1) + (LEVELS[i].s ? ', boss level' : '') + (open ? '' : ', locked') + '">' +
         (LEVELS[i].s ? ICON.scroll : '') + (hasMedal(i) ? ICON.medal : '') + '<span class="n">' + (i + 1) + '</span>' + (open ? '<span class="st">' + stars + '</span>' : ICON.lock) + '</button>';
     }
-    html += '<section class="world" style="--acc:' + th.accent + '"><header><small>Värld ' + (w + 1) + '</small><h3>' + th.name + '</h3><em>' + th.sub + '</em><b>' + got + ' / 36</b></header><div class="lgrid">' + cells + '</div></section>';
+    html += '<section class="world" style="--acc:' + th.accent + '"><header><small>World ' + (w + 1) + '</small><h3>' + th.name + '</h3><em>' + th.sub + '</em><b>' + got + ' / 36</b></header><div class="lgrid">' + cells + '</div></section>';
   }
   $('worlds').innerHTML = html;
   $('selTotal').innerHTML = ICON.star + totalStars() + ' / ' + LEVELS.length * 3 + '<span class="sep"></span>' + ICON.medal + totalMedals() + ' / ' + parCount();
@@ -272,9 +272,9 @@ function panel(o) {
 function pause() {
   if (G.mode !== 'play' && G.mode !== 'intro') return;
   G.resume = G.mode; G.mode = 'paused';
-  panel({ kick: THEMES[Math.floor(G.idx / 12)].name + ' · bana ' + (G.idx + 1), title: 'Paus', body: 'Stubinen står still så länge.',
-    btns: [{ label: 'Fortsätt', primary: true, esc: true, go: () => { $('overlay').hidden = true; G.mode = G.resume; } },
-      G.arcade ? { label: 'Avsluta omgången', go: () => arcadeOver(false) } : { label: 'Börja om', retry: true, go: () => startLevel(G.idx) }].concat(G.arcade ? [] : [{ label: 'Banor', go: showSelect }]) });
+  panel({ kick: THEMES[Math.floor(G.idx / 12)].name + ' · level ' + (G.idx + 1), title: 'Paused', body: 'The fuse stops burning while you are paused.',
+    btns: [{ label: 'Resume', primary: true, esc: true, go: () => { $('overlay').hidden = true; G.mode = G.resume; } },
+      G.arcade ? { label: 'End run', go: () => arcadeOver(false) } : { label: 'Restart', retry: true, go: () => startLevel(G.idx) }].concat(G.arcade ? [] : [{ label: 'Levels', go: showSelect }]) });
 }
 function onWin() {
   G.medal = !!G.L.par && G.pushes <= G.L.par;
@@ -289,36 +289,36 @@ function onWin() {
 function onLose() { if (G.arcade) { G.arcade.misses++; setHud(); } }
 function pushLine() {
   if (!G.L.par) return '';
-  if (G.medal) return '<div class="pushres good">' + ICON.medal + '<span><b>' + G.pushes + ' knuffar</b>, samma som rekordet.' + (G.newMedal ? ' Ny medalj!' : '') + '</span></div>';
-  return '<div class="pushres">' + ICON.medal + '<span><b>' + G.pushes + ' knuffar</b>. Rekordet är ' + G.L.par + '. Spela igen för medaljen.</span></div>';
+  if (G.medal) return '<div class="pushres good">' + ICON.medal + '<span><b>' + G.pushes + ' pushes</b>, the fewest possible.' + (G.newMedal ? ' New medal!' : '') + '</span></div>';
+  return '<div class="pushres">' + ICON.medal + '<span><b>' + G.pushes + ' pushes</b>. It can be done in ' + G.L.par + '. Play again for the medal.</span></div>';
 }
 function showResult() {
-  const i = G.idx, last = i === LEVELS.length - 1, kick = THEMES[Math.floor(i / 12)].name + ' · bana ' + (i + 1);
+  const i = G.idx, last = i === LEVELS.length - 1, kick = THEMES[Math.floor(i / 12)].name + ' · level ' + (i + 1);
   showHint('');
   if (G.mode === 'won') {
     for (let q = 0; q < G.stars; q++) Snd.star(q);
     if (G.medal) Snd.medal();
     if (G.arcade) {
       if (last) return arcadeOver(true);
-      return panel({ kick, title: 'Desarmerad', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>+' + G.arcade.gain + '</b> poäng' + (G.medal ? ', varav 100 för rekordet' : '') + '. Totalt <b>' + G.arcade.score + '</b>.',
-        btns: [{ label: 'Nästa bana', primary: true, go: () => startLevel(i + 1) }, { label: 'Avsluta', esc: true, go: () => arcadeOver(false) }] });
+      return panel({ kick, title: 'Defused', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>+' + G.arcade.gain + '</b> points' + (G.medal ? ', including 100 for the fewest pushes' : '') + '. Total <b>' + G.arcade.score + '</b>.',
+        btns: [{ label: 'Next level', primary: true, go: () => startLevel(i + 1) }, { label: 'End run', esc: true, go: () => arcadeOver(false) }] });
     }
-    if (last) return panel({ kick: 'Alla ' + LEVELS.length + ' banor klara', title: 'Staden är säker', cls: 'good', stars: G.stars, body: 'Du har ' + totalStars() + ' av ' + LEVELS.length * 3 + ' stjärnor. Banor med färre än tre går att spela om.',
-      btns: [{ label: 'Till banorna', primary: true, esc: true, go: showSelect }, { label: 'Spela igen', retry: true, go: () => startLevel(i) }] });
+    if (last) return panel({ kick: 'All ' + LEVELS.length + ' levels cleared', title: 'The city is safe', cls: 'good', stars: G.stars, body: 'You have ' + totalStars() + ' of ' + LEVELS.length * 3 + ' stars. Replay any level to improve it.',
+      btns: [{ label: 'Levels', primary: true, esc: true, go: showSelect }, { label: 'Play again', retry: true, go: () => startLevel(i) }] });
     const newWorld = (i + 1) % 12 === 0;
-    return panel({ kick, title: 'Desarmerad', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>' + fmt(G.timeLeft) + ' s</b> kvar på stubinen.' + (newWorld ? ' Nästa värld: ' + THEMES[(i + 1) / 12].name + '.' : ''),
-      btns: [{ label: 'Nästa bana', primary: true, go: () => startLevel(i + 1) }, { label: 'Spela igen', retry: true, go: () => startLevel(i) }, { label: 'Banor', esc: true, go: showSelect }] });
+    return panel({ kick, title: 'Defused', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>' + fmt(G.timeLeft) + ' s</b> left on the fuse.' + (newWorld ? ' Next world: ' + THEMES[(i + 1) / 12].name + '.' : ''),
+      btns: [{ label: 'Next level', primary: true, go: () => startLevel(i + 1) }, { label: 'Play again', retry: true, go: () => startLevel(i) }, { label: 'Levels', esc: true, go: showSelect }] });
   }
   const sq = G.loseKind === 'squash';
   if (G.arcade && G.arcade.misses >= 3) return arcadeOver(false);
-  panel({ kick, title: sq ? 'Klämd' : 'Pang', cls: 'bad', body: (sq ? 'Väggarna tryckte dig mot högerkanten.' : 'Stubinen brann ner innan du hann fram.') + (G.arcade ? ' Miss ' + G.arcade.misses + ' av 3.' : ''),
-    btns: [{ label: 'Försök igen', primary: true, retry: true, go: () => startLevel(i) }, G.arcade ? { label: 'Avsluta', esc: true, go: () => arcadeOver(false) } : { label: 'Banor', esc: true, go: showSelect }] });
+  panel({ kick, title: sq ? 'Crushed' : 'Boom', cls: 'bad', body: (sq ? 'The walls pushed you into the right edge.' : 'The fuse burned down before you got there.') + (G.arcade ? ' Miss ' + G.arcade.misses + ' of 3.' : ''),
+    btns: [{ label: 'Try again', primary: true, retry: true, go: () => startLevel(i) }, G.arcade ? { label: 'End run', esc: true, go: () => arcadeOver(false) } : { label: 'Levels', esc: true, go: showSelect }] });
 }
 function arcadeOver(all) {
   const sc = G.arcade.score, best = sc > (Save.d.hi | 0);
   if (best) { Save.d.hi = sc; Save.put(); }
-  panel({ kick: 'Arkad', title: all ? 'Alla banor klara' : 'Slut på försök', cls: all ? 'good' : 'bad', body: 'Du kom till bana <b>' + (G.idx + 1) + '</b> med <b>' + sc + '</b> poäng.' + (best && sc ? ' Nytt rekord.' : Save.d.hi ? ' Rekordet är ' + Save.d.hi + '.' : ''),
-    btns: [{ label: 'Ny omgång', primary: true, go: () => { G.arcade = { score: 0, misses: 0 }; startLevel(0); } }, { label: 'Till menyn', esc: true, go: showTitle }] });
+  panel({ kick: 'Arcade', title: all ? 'All levels cleared' : 'Out of tries', cls: all ? 'good' : 'bad', body: 'You reached level <b>' + (G.idx + 1) + '</b> with <b>' + sc + '</b> points.' + (best && sc ? ' New high score.' : Save.d.hi ? ' Your best is ' + Save.d.hi + '.' : ''),
+    btns: [{ label: 'New run', primary: true, go: () => { G.arcade = { score: 0, misses: 0 }; startLevel(0); } }, { label: 'Main menu', esc: true, go: showTitle }] });
 }
 
 document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.blur(); });
