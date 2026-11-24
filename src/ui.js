@@ -1,7 +1,7 @@
 /* ===== Saving, sound, input, menus, main loop ===== */
 const $ = id => document.getElementById(id);
 const app = $('app');
-const IS_TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+let IS_TOUCH = false;
 const ICON = {
   star: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2l2.9 6.2 6.8.8-5 4.7 1.3 6.7L12 17.3l-6 3.3 1.3-6.7-5-4.7 6.8-.8z"/></svg>',
   lock: '<svg class="lock" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.500V20a1.500 1.500 0 0 1-1.500 1.500h-13A1.500 1.500 0 0 1 4 20v-8.500A1.500 1.500 0 0 1 5.500 10zm2.500 0h5V7a2.500 2.500 0 0 0-5 0z"/></svg>',
@@ -14,9 +14,9 @@ const fmt = t => (Math.max(0, t)).toFixed(1);
 
 /* ---------- save (this browser only) ---------- */
 const Save = {
-  d: { stars: {}, medal: {}, all: false, mute: false, hi: 0 },
-  load() { try { const s = localStorage.getItem('stubin.v1'); if (s) Object.assign(this.d, JSON.parse(s)); } catch (e) { /* storage may be unavailable */ } if (!this.d.medal) this.d.medal = {}; },
-  put() { try { localStorage.setItem('stubin.v1', JSON.stringify(this.d)); } catch (e) { /* keep playing without it */ } }
+  d: { stars: {}, medal: {}, all: false, mute: false, music: true, hi: 0 },
+  load() { try { const s = Platform.getItem('stubin.v1'); if (s) Object.assign(this.d, JSON.parse(s)); } catch (e) { /* corrupt or missing save: start fresh */ } if (!this.d.medal) this.d.medal = {}; },
+  put() { Platform.setItem('stubin.v1', JSON.stringify(this.d)); }
 };
 const starsOf = i => Save.d.stars[i] | 0;
 const isOpen = i => Save.d.all || i === 0 || starsOf(i - 1) > 0 || starsOf(i) > 0;
@@ -33,15 +33,18 @@ const Snd = {
     if (this.ac) { if (this.ac.state === 'suspended') this.ac.resume().catch(() => {}); return; }
     try {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-      this.ac = new AC(); this.out = this.ac.createGain(); this.out.gain.value = Save.d.mute ? 0 : .55; this.out.connect(this.ac.destination);
+      this.ac = new AC(); this.out = this.ac.createGain(); this.out.gain.value = 0; this.out.connect(this.ac.destination); this.applyGain();
       const n = this.ac.sampleRate, buf = this.ac.createBuffer(1, n, n), d = buf.getChannelData(0);
       for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
       this.nz = buf;
+      Music.kick();
     } catch (e) { this.ac = null; }
   },
-  setMute(m) { Save.d.mute = m; Save.put(); if (this.out) this.out.gain.value = m ? 0 : .55; $('btnSound').innerHTML = m ? ICON.off : ICON.on; },
+  silent() { return Save.d.mute || Platform.sysMute || Platform.adBusy; },
+  applyGain() { if (this.out) try { this.out.gain.setTargetAtTime(this.silent() ? 0 : .55, this.ac.currentTime, .03); } catch (e) { /* ignore */ } },
+  setMute(m) { Save.d.mute = m; Save.put(); this.applyGain(); $('btnSound').innerHTML = m ? ICON.off : ICON.on; },
   tone(f, dur, type, vol, to, when) {
-    const ac = this.ac; if (!ac || Save.d.mute) return;
+    const ac = this.ac; if (!ac || this.silent()) return;
     try {
       const t = ac.currentTime + (when || 0), o = ac.createOscillator(), g = ac.createGain();
       o.type = type || 'square'; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
@@ -50,7 +53,7 @@ const Snd = {
     } catch (e) { /* ignore */ }
   },
   noise(dur, vol, f0, f1, type, when) {
-    const ac = this.ac; if (!ac || !this.nz || Save.d.mute) return;
+    const ac = this.ac; if (!ac || !this.nz || this.silent()) return;
     try {
       const t = ac.currentTime + (when || 0), s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
       s.buffer = this.nz; s.loop = true; fl.type = type || 'lowpass'; fl.frequency.setValueAtTime(f0, t); fl.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
@@ -84,32 +87,36 @@ const Input = {
   tap(d) { this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
   clear() { this.held.length = 0; this.queue.length = 0; }
 };
-const KEYDIR = { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, w: 0, s: 1, a: 2, d: 3, W: 0, S: 1, A: 2, D: 3 };
+// keys are read by physical position, so WASD also works as ZQSD on AZERTY keyboards
+const KEYDIR = { ArrowUp: 0, ArrowDown: 1, ArrowLeft: 2, ArrowRight: 3, KeyW: 0, KeyS: 1, KeyA: 2, KeyD: 3 };
 
 window.addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   Snd.init();
-  const k = e.key;
+  const k = e.code;
   const overlayOpen = !$('overlay').hidden;
   if (k in KEYDIR && !overlayOpen && (G.mode === 'play' || G.mode === 'intro')) { e.preventDefault(); if (!e.repeat) Input.press(KEYDIR[k]); return; }
+  if (k in KEYDIR || k === 'Space') e.preventDefault();
   if (e.repeat) return;
   if (overlayOpen) {
-    if (k === 'Enter' || k === ' ') { e.preventDefault(); const b = document.querySelector('#card .btn.primary'); if (b) b.click(); }
-    else if (k === 'Escape') { e.preventDefault(); const b = document.querySelector('#card [data-esc]'); if (b) b.click(); }
-    else if (k === 'r' || k === 'R') { const b = document.querySelector('#card [data-retry]'); if (b) b.click(); }
+    if (Platform.adBusy) return;
+    if (k === 'Enter' || k === 'NumpadEnter' || k === 'Space') { e.preventDefault(); const b = document.querySelector('#card .btn.primary'); if (b) b.click(); }
+    else if (k === 'KeyR') { const b = document.querySelector('#card [data-retry]'); if (b) b.click(); }
     return;
   }
   if (G.mode === 'play' || G.mode === 'intro') {
-    if (k === 'r' || k === 'R') restart();
-    else if (k === 'z' || k === 'Z' || k === 'u' || k === 'U' || k === 'Backspace') { e.preventDefault(); undo(); }
-    else if (k === 'Escape' || k === 'p' || k === 'P') pause();
-    else if (k === 'm' || k === 'M') Snd.setMute(!Save.d.mute);
+    if (k === 'KeyR') restart();
+    else if (k === 'KeyZ' || k === 'KeyU' || k === 'Backspace') { e.preventDefault(); undo(); }
+    else if (k === 'KeyP') pause();
+    else if (k === 'KeyM') Snd.setMute(!Save.d.mute);
     return;
   }
-  if (!$('title').hidden && (k === 'Enter' || k === ' ')) { e.preventDefault(); $('btnPlay').click(); }
-  else if (!$('select').hidden && k === 'Escape') showTitle();
+  if (!$('title').hidden && (k === 'Enter' || k === 'Space')) { e.preventDefault(); $('btnPlay').click(); }
 });
-window.addEventListener('keyup', e => { if (e.key in KEYDIR) Input.release(KEYDIR[e.key]); });
+window.addEventListener('keyup', e => { if (e.code in KEYDIR) Input.release(KEYDIR[e.code]); });
+// iOS only lets audio start inside a touchend or click handler
+document.addEventListener('touchend', () => Snd.init(), { passive: true });
+document.addEventListener('click', () => Snd.init());
 window.addEventListener('blur', () => { Input.clear(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { Input.clear(); pause(); } });
 
@@ -197,6 +204,8 @@ function startLevel(i) {
   Input.clear();
   loadLevel(i);
   G.mode = 'intro';
+  Platform.levelsThisSession++;
+  Music.set({ world: Math.floor(i / 12), boss: !!LEVELS[i].s });
   setHud();
   showHint(hintFor(i));
   requestAnimationFrame(() => layout(true));
@@ -207,15 +216,17 @@ function showTitle() {
   G.arcade = null;
   const n = nextIdx();
   loadLevel(n); G.mode = 'title';
+  Music.set({ world: Math.floor(n / 12), menu: true });
   app.style.setProperty('--acc', G.theme.accent);
   const any = totalStars() > 0;
   $('btnPlay').textContent = any ? 'Continue at level ' + (n + 1) : 'Play';
-  $('titleFoot').textContent = LEVELS.length + ' levels in 10 worlds · R restart · Z undo · M sound' + (Save.d.hi ? ' · Arcade best ' + Save.d.hi : '');
+  $('titleFoot').textContent = LEVELS.length + ' levels in 10 worlds · R restart · Z undo · P pause · M sound' + (Save.d.hi ? ' · Arcade best ' + Save.d.hi : '');
   requestAnimationFrame(() => layout(true));
 }
 function showSelect() {
   hideScreens(); $('select').hidden = false; $('hud').hidden = true; app.classList.remove('playing'); showHint('');
   if (G.mode !== 'title') { G.arcade = null; G.mode = 'title'; }
+  Music.set({ world: Math.floor(nextIdx() / 12), menu: true });
   const nx = nextIdx();
   let html = '';
   for (let w = 0; w < LEVELS.length / 12; w++) {
@@ -265,7 +276,7 @@ function panel(o) {
   h += '</div>';
   const card = $('card'); card.innerHTML = h;
   card.style.animation = 'none'; void card.offsetWidth; card.style.animation = '';
-  card.onclick = e => { const b = e.target.closest('.btn'); if (!b) return; Snd.init(); Snd.click(); o.btns[+b.dataset.k].go(); };
+  card.onclick = e => { const b = e.target.closest('.btn'); if (!b || Platform.adBusy) return; Snd.init(); Snd.click(); o.btns[+b.dataset.k].go(); };
   $('overlay').hidden = false;
   Input.clear();
 }
@@ -274,6 +285,7 @@ function pause() {
   G.resume = G.mode; G.mode = 'paused';
   panel({ kick: THEMES[Math.floor(G.idx / 12)].name + ' · level ' + (G.idx + 1), title: 'Paused', body: 'The fuse stops burning while you are paused.',
     btns: [{ label: 'Resume', primary: true, esc: true, go: () => { $('overlay').hidden = true; G.mode = G.resume; } },
+      { label: 'Music: ' + (Save.d.music !== false ? 'on' : 'off'), go: () => { Save.d.music = Save.d.music === false; Save.put(); Music.kick(); G.mode = G.resume; pause(); } },
       G.arcade ? { label: 'End run', go: () => arcadeOver(false) } : { label: 'Restart', retry: true, go: () => startLevel(G.idx) }].concat(G.arcade ? [] : [{ label: 'Levels', go: showSelect }]) });
 }
 function onWin() {
@@ -298,21 +310,22 @@ function showResult() {
   if (G.mode === 'won') {
     for (let q = 0; q < G.stars; q++) Snd.star(q);
     if (G.medal) Snd.medal();
+    if ((i + 1) % 12 === 0 || LEVELS[i].s) Platform.happy();
     if (G.arcade) {
       if (last) return arcadeOver(true);
       return panel({ kick, title: 'Defused', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>+' + G.arcade.gain + '</b> points' + (G.medal ? ', including 100 for the fewest pushes' : '') + '. Total <b>' + G.arcade.score + '</b>.',
-        btns: [{ label: 'Next level', primary: true, go: () => startLevel(i + 1) }, { label: 'End run', esc: true, go: () => arcadeOver(false) }] });
+        btns: [{ label: 'Next level', primary: true, go: () => Platform.breakThen(() => startLevel(i + 1)) }, { label: 'End run', esc: true, go: () => arcadeOver(false) }] });
     }
     if (last) return panel({ kick: 'All ' + LEVELS.length + ' levels cleared', title: 'The city is safe', cls: 'good', stars: G.stars, body: 'You have ' + totalStars() + ' of ' + LEVELS.length * 3 + ' stars. Replay any level to improve it.',
-      btns: [{ label: 'Levels', primary: true, esc: true, go: showSelect }, { label: 'Play again', retry: true, go: () => startLevel(i) }] });
+      btns: [{ label: 'Levels', primary: true, esc: true, go: showSelect }, { label: 'Play again', retry: true, go: () => Platform.breakThen(() => startLevel(i)) }] });
     const newWorld = (i + 1) % 12 === 0;
     return panel({ kick, title: 'Defused', cls: 'good', stars: G.stars, push: pushLine(), body: '<b>' + fmt(G.timeLeft) + ' s</b> left on the fuse.' + (newWorld ? ' Next world: ' + THEMES[(i + 1) / 12].name + '.' : ''),
-      btns: [{ label: 'Next level', primary: true, go: () => startLevel(i + 1) }, { label: 'Play again', retry: true, go: () => startLevel(i) }, { label: 'Levels', esc: true, go: showSelect }] });
+      btns: [{ label: 'Next level', primary: true, go: () => Platform.breakThen(() => startLevel(i + 1)) }, { label: 'Play again', retry: true, go: () => Platform.breakThen(() => startLevel(i)) }, { label: 'Levels', esc: true, go: showSelect }] });
   }
   const sq = G.loseKind === 'squash';
   if (G.arcade && G.arcade.misses >= 3) return arcadeOver(false);
   panel({ kick, title: sq ? 'Crushed' : 'Boom', cls: 'bad', body: (sq ? 'The walls pushed you into the right edge.' : 'The fuse burned down before you got there.') + (G.arcade ? ' Miss ' + G.arcade.misses + ' of 3.' : ''),
-    btns: [{ label: 'Try again', primary: true, retry: true, go: () => startLevel(i) }, G.arcade ? { label: 'End run', esc: true, go: () => arcadeOver(false) } : { label: 'Levels', esc: true, go: showSelect }] });
+    btns: [{ label: 'Try again', primary: true, retry: true, go: () => Platform.breakThen(() => startLevel(i)) }, G.arcade ? { label: 'End run', esc: true, go: () => arcadeOver(false) } : { label: 'Levels', esc: true, go: showSelect }] });
 }
 function arcadeOver(all) {
   const sc = G.arcade.score, best = sc > (Save.d.hi | 0);
@@ -327,22 +340,32 @@ document.addEventListener('click', e => { const b = e.target.closest('button'); 
 let lastT = 0, lastFuse = -1, lastTxt = '';
 function frame(t) {
   requestAnimationFrame(frame);
+  if (window.__capture) return; // frames are stepped by hand when recording the trailer
   let dt = (t - lastT) / 1000; lastT = t;
   if (!(dt > 0)) return; if (dt > .05) dt = .05;
   if (G.mode !== 'paused') update(dt);
   render();
-  if (!$('hud').hidden) {
-    const r = clamp(G.timeLeft / G.time, 0, 1), rr2 = Math.round(r * 500) / 500;
-    if (rr2 !== lastFuse) { lastFuse = rr2; $('fuse').style.setProperty('--r', rr2); }
-    const tx = fmt(G.timeLeft);
-    if (tx !== lastTxt) { lastTxt = tx; $('hudTime').textContent = tx; $('fuse').classList.toggle('urgent', G.timeLeft < 10 && G.mode === 'play'); }
-  }
+  Platform.gameplay((G.mode === 'play' || G.mode === 'intro') && $('overlay').hidden);
+  updateHud();
+}
+function updateHud() {
+  if ($('hud').hidden) return;
+  const r = clamp(G.timeLeft / G.time, 0, 1), rr2 = Math.round(r * 500) / 500;
+  if (rr2 !== lastFuse) { lastFuse = rr2; $('fuse').style.setProperty('--r', rr2); }
+  const tx = fmt(G.timeLeft);
+  if (tx !== lastTxt) { lastTxt = tx; $('hudTime').textContent = tx; $('fuse').classList.toggle('urgent', G.timeLeft < 10 && G.mode === 'play'); }
 }
 if (window.ResizeObserver) new ResizeObserver(() => layout()).observe(stageEl);
 window.addEventListener('resize', () => layout());
-Save.load();
-$('btnSound').innerHTML = Save.d.mute ? ICON.off : ICON.on;
-showTitle();
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout());
-requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
-window.__stubin = { G, V, Save, startLevel, showSelect, showTitle, Rules, Input, doMove, update, LEVELS };
+(async () => {
+  await Platform.init();
+  IS_TOUCH = Platform.isMobile();
+  app.classList.toggle('touch', IS_TOUCH);
+  Save.load();
+  $('btnSound').innerHTML = Save.d.mute ? ICON.off : ICON.on;
+  // a new player lands straight in level 1; returning players see the menu
+  if (totalStars() === 0 && !Save.d.all) startLevel(0); else showTitle();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layout());
+  requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
+})();
+window.__stubin = { G, V, Save, startLevel, showSelect, showTitle, Rules, Input, doMove, update, render, updateHud, layout, buildFrame, LEVELS, Platform, Music };

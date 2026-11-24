@@ -85,7 +85,10 @@ button:focus-visible, a:focus-visible, label:focus-within { outline: 3px solid v
 #pad button:active, #pad button.dn { background: var(--fuse); color: #201400; transform: translateY(2px); }
 #pad svg { width: 26px; height: 26px; }
 #pad .u { grid-area: 1 / 2; } #pad .l { grid-area: 2 / 1; } #pad .r { grid-area: 2 / 3; } #pad .d { grid-area: 3 / 2; }
-@media (pointer: coarse) { #app.playing #pad { display: grid; } #hint { bottom: auto; top: 10px; } }
+#app.touch.playing #pad { display: grid; }
+#app.touch #hint { bottom: auto; top: 10px; }
+@media (orientation: landscape) { #app.touch #hint { left: auto; right: 10px; transform: none; width: 196px; max-width: none; border-radius: 14px; font-size: 14px; padding: 8px 12px; text-align: left; } }
+@media (orientation: portrait) { #app.touch #hint { top: auto; bottom: 14px; left: 12px; right: 210px; transform: none; max-width: none; border-radius: 14px; font-size: 14px; text-align: left; } }
 
 /* ---------- screens ---------- */
 .screen { position: absolute; inset: 0; z-index: 5; overflow: auto; -webkit-overflow-scrolling: touch; }
@@ -161,7 +164,7 @@ h1 { font-family: var(--display); font-weight: 400; font-size: clamp(64px, 13vw,
 .stars svg.on:nth-child(2) { animation-delay: .18s; } .stars svg.on:nth-child(3) { animation-delay: .36s; }
 @keyframes starpop { from { transform: scale(0) rotate(-40deg); } }
 .cbtns { display: grid; gap: 10px; margin-top: 6px; }
-.cbtns .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cbtns .row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; }
 .cbtns .btn { width: 100%; }
 kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; background: rgba(0, 0, 0, .25); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25); }
 
@@ -180,6 +183,15 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
   #hint { font-size: 15px; border-radius: 16px; }
   .card h2 { font-size: 36px; }
 }
+@media (max-height: 560px) {
+  .tcol { gap: 12px; padding: 16px 28px; justify-content: center; }
+  h1 { font-size: clamp(48px, 15vh, 84px); }
+  .kick { font-size: 12px; } .tag { font-size: 17px; max-width: 44ch; }
+  .how { display: none; }
+  .btn { min-height: 44px; font-size: 17px; padding: 8px 18px; }
+  .card { padding: 16px 20px; gap: 10px; } .card h2 { font-size: 32px; } .stars svg { width: 40px; height: 40px; }
+  .pushres { padding: 6px 10px; font-size: 15px; } .pushres svg { width: 26px; height: 26px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .rope .spark, .wick::after, .fuse.urgent b, .card, .stars svg.on { animation: none; }
   .wick::before { animation: none; width: 35%; } .wick::after { left: 35%; }
@@ -189,7 +201,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
 <body>
 <div id="app">
   <header id="hud" hidden>
-    <button class="ib" id="btnPause" aria-label="Pause" title="Pause (Esc)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
+    <button class="ib" id="btnPause" aria-label="Pause" title="Pause (P)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg></button>
     <div class="lvl"><span id="hudWorld">The Sewers</span><strong id="hudLevel">Level 1</strong></div>
     <div class="pushc" id="hudPush" title="Pushes you have made, and the fewest possible for this level"><span>Pushes</span><strong><b id="hudPushN">0</b> <i id="hudPar"></i></strong></div>
     <div class="fuse" id="fuse" role="timer" aria-label="Time left">
@@ -233,7 +245,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
         <li>Walk straight into a wall to push it one square. It only moves if the square behind it is free.</li>
         <li>Reach a bomb before the fuse burns down. On boss levels the maze rolls in, so do not get crushed against the right edge.</li>
       </ul>
-      <div class="foot" id="titleFoot">120 levels in 10 worlds · R restart · Z undo · M sound</div>
+      <div class="foot" id="titleFoot">120 levels in 10 worlds · R restart · Z undo · P pause · M sound</div>
     </div>
   </section>
 

@@ -278,10 +278,15 @@ function layout(force) {
   V.cw = cw; V.ch = ch; V.dpr = dpr;
   if (!G.st) return;
   const C = G.st.vw, R = G.st.h;
-  let s = Math.floor(Math.min(cw / (C + 1.3), ch / (R + 2.05)));
+  // on touch devices the d-pad gets its own strip, so it never covers the board
+  const ap = document.getElementById('app');
+  const pad = ap.classList.contains('touch') && ap.classList.contains('playing') ? Math.round(212 * dpr) : 0;
+  const aw = cw > ch ? cw - pad : cw, ah = cw > ch ? ch : ch - pad;
+  let s = Math.floor(Math.min(aw / (C + 1.3), ah / (R + 2.05)));
   s = clamp(s, 10, Math.round(96 * dpr));
+  if (window.__zoom) s = Math.round(s * window.__zoom); // used only when rendering store covers
   V.s = s; V.ft = Math.round(s * .42); V.hh = Math.round(s * .24); V.C = C; V.R = R;
-  V.ox = Math.round((cw - C * s) / 2); V.oy = Math.round((ch - R * s) / 2 + V.hh * .35);
+  V.ox = Math.round((aw - C * s) / 2); V.oy = Math.round((ah - R * s) / 2 + V.hh * .35);
   const sk = G.themeIdx + ':' + s;
   if (V.spritesKey !== sk) {
     V.spritesKey = sk;
@@ -296,7 +301,7 @@ function layout(force) {
     V.shPad = Math.ceil(s * .35);
     V.shadow = mkCanvas(s + V.shPad * 2, s + V.shPad * 2); paintShadow(V.shadow.getContext('2d'), s, V.shPad);
   }
-  const fk = [sk, C, R, cw, ch, G.st.scroll, G.L.sx].join(':');
+  const fk = [sk, C, R, cw, ch, G.st.scroll, G.L.sx, V.ox, V.oy].join(':');
   if (V.frameKey !== fk || force) { V.frameKey = fk; buildFrame(); }
   const lw = Math.ceil(cw / 4), lh = Math.ceil(ch / 4);
   if (!V.light || V.light.width !== lw || V.light.height !== lh) { V.light = mkCanvas(lw, lh); V.lctx = V.light.getContext('2d'); }
