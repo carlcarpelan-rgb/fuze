@@ -49,4 +49,5 @@ Every wall moves one square, but only if the square behind it is free, so each p
 - The SDK reports gameplay start and stop, saves progress through the Data module, and respects the platform mute setting.
 - Midgame ads are requested only at level transitions, from the fourth level of a session onward. Gameplay continues normally if no ad is served.
 - New players start directly in level 1. Returning players see the menu with their progress.
+- There is no tutorial text. Every mechanic is introduced on its own level and shows itself the first time the player bumps into it.
 - Escape is not used, so it never conflicts with leaving fullscreen.

@@ -82,9 +82,9 @@ const Snd = {
 /* ---------- input ---------- */
 const Input = {
   held: [], queue: [], t0: 0,
-  press(d) { if (!this.held.includes(d)) this.held.push(d); this.t0 = performance.now(); this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
+  press(d) { showHint(''); if (!this.held.includes(d)) this.held.push(d); this.t0 = performance.now(); this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
   release(d) { const i = this.held.indexOf(d); if (i >= 0) this.held.splice(i, 1); },
-  tap(d) { this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
+  tap(d) { showHint(''); this.queue.push(d); if (this.queue.length > 2) this.queue.shift(); },
   clear() { this.held.length = 0; this.queue.length = 0; }
 };
 // keys are read by physical position, so WASD also works as ZQSD on AZERTY keyboards
@@ -169,30 +169,11 @@ function showHint(text, ms) {
   clearTimeout(hintTimer);
   if (!text) { el.classList.add('off'); return; }
   el.textContent = text; el.classList.remove('off');
-  hintTimer = setTimeout(() => el.classList.add('off'), ms || 9000);
+  hintTimer = setTimeout(() => el.classList.add('off'), ms || 5000);
 }
 let firstMulti = -1, firstScroll = -1, firstX = -1, firstO = -1, firstI = -1;
-function hintFor(i) {
-  if (firstMulti < 0) {
-    LEVELS.forEach((lv, k) => {
-      if (firstMulti < 0 && (lv.m.split('B').length - 1) > 1) firstMulti = k;
-      if (firstScroll < 0 && lv.s) firstScroll = k;
-      if (firstX < 0 && lv.m.includes('X')) firstX = k;
-      if (firstO < 0 && lv.m.includes('O')) firstO = k;
-      if (firstI < 0 && lv.m.includes('I')) firstI = k;
-    });
-  }
-  const world = i % 12 === 0 && i ? 'World ' + (i / 12 + 1) + ', ' + THEMES[i / 12].name + '. ' : '';
-  if (i === 0) return (IS_TOUCH ? 'Swipe or use the d-pad. ' : 'Arrow keys or WASD. ') + 'The way to the bomb is blocked: walk straight into a wall to push it. It only moves if the square behind it is free.';
-  if (i === 1) return IS_TOUCH ? 'Stuck? The arrow at the top right undoes a move.' : 'Stuck? Z undoes a move and R restarts the level.';
-  if (i === 2) return 'Top left shows your pushes and the fewest possible. Match that number to earn a medal.';
-  if (i === firstX) return world + 'New: dark iron blocks are bolted down. They cannot be pushed.';
-  if (i === firstO) return world + 'New: holes in the floor. You cannot cross them, but push a block in and the hole is filled.';
-  if (i === firstI) return world + 'New: ice blocks slide until they hit something. If one slides into a hole, it fills it.';
-  if (i === firstScroll) return 'Boss level! The maze rolls in from the left. Find the door in each iron wall and push through before you are crushed against the right edge.';
-  if (i === firstMulti) return 'Several bombs. Reaching any one of them is enough.';
-  if (world) return world + THEMES[i / 12].sub + '.';
-  if (LEVELS[i].s) return i % 12 === 11 ? 'Final boss of the world. Faster rolling and more iron walls.' : 'Boss level. Pick a door in time, and pick the right one.';
+function hintFor() {
+  // no in-game text: every mechanic explains itself the first time you bump into it
   return '';
 }
 

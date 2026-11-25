@@ -86,11 +86,14 @@ button:focus-visible, a:focus-visible, label:focus-within { outline: 3px solid v
 #pad svg { width: 26px; height: 26px; }
 #pad .u { grid-area: 1 / 2; } #pad .l { grid-area: 2 / 1; } #pad .r { grid-area: 2 / 3; } #pad .d { grid-area: 3 / 2; }
 #app.touch.playing #pad { display: grid; }
-#app.touch #hint { bottom: auto; top: 10px; }
-@media (orientation: landscape) { #app.touch #hint { left: auto; right: 10px; transform: none; width: 196px; max-width: none; border-radius: 14px; font-size: 14px; padding: 8px 12px; text-align: left; } }
+#app.touch #hint { bottom: auto; top: 10px; font-size: 15px; }
+@media (orientation: landscape) { #app.touch #hint { left: calc((100% - 212px) / 2); } }
+@media (max-height: 720px) and (orientation: portrait), (max-width: 720px) and (orientation: landscape) {
+  #pad { grid-template: repeat(3, 50px) / repeat(3, 50px); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  #pad svg { width: 22px; height: 22px; }
+}
 @media (orientation: portrait) {
   #app.touch #pad { right: auto; left: 50%; transform: translateX(-50%); }
-  #app.touch #hint { top: auto; bottom: 212px; border-radius: 14px; font-size: 14px; }
 }
 
 /* ---------- screens ---------- */
