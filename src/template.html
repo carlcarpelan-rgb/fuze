@@ -88,7 +88,10 @@ button:focus-visible, a:focus-visible, label:focus-within { outline: 3px solid v
 #app.touch.playing #pad { display: grid; }
 #app.touch #hint { bottom: auto; top: 10px; }
 @media (orientation: landscape) { #app.touch #hint { left: auto; right: 10px; transform: none; width: 196px; max-width: none; border-radius: 14px; font-size: 14px; padding: 8px 12px; text-align: left; } }
-@media (orientation: portrait) { #app.touch #hint { top: auto; bottom: 14px; left: 12px; right: 210px; transform: none; max-width: none; border-radius: 14px; font-size: 14px; text-align: left; } }
+@media (orientation: portrait) {
+  #app.touch #pad { right: auto; left: 50%; transform: translateX(-50%); }
+  #app.touch #hint { top: auto; bottom: 212px; border-radius: 14px; font-size: 14px; }
+}
 
 /* ---------- screens ---------- */
 .screen { position: absolute; inset: 0; z-index: 5; overflow: auto; -webkit-overflow-scrolling: touch; }

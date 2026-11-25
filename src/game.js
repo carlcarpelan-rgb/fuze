@@ -281,12 +281,15 @@ function layout(force) {
   // on touch devices the d-pad gets its own strip, so it never covers the board
   const ap = document.getElementById('app');
   const pad = ap.classList.contains('touch') && ap.classList.contains('playing') ? Math.round(212 * dpr) : 0;
-  const aw = cw > ch ? cw - pad : cw, ah = cw > ch ? ch : ch - pad;
+  // in portrait, also leave room for a hint between the board and the pad
+  const aw = cw > ch ? cw - pad : cw, ah = cw > ch ? ch : ch - pad - (pad ? Math.round(118 * dpr) : 0);
   let s = Math.floor(Math.min(aw / (C + 1.3), ah / (R + 2.05)));
   s = clamp(s, 10, Math.round(96 * dpr));
   if (window.__zoom) s = Math.round(s * window.__zoom); // used only when rendering store covers
   V.s = s; V.ft = Math.round(s * .42); V.hh = Math.round(s * .24); V.C = C; V.R = R;
   V.ox = Math.round((aw - C * s) / 2); V.oy = Math.round((ah - R * s) / 2 + V.hh * .35);
+  // portrait with a d-pad: board at the top, so the gap above the pad is free for hints
+  if (pad && ch >= cw) V.oy = Math.min(V.oy, V.hh + V.ft + Math.round(10 * dpr));
   const sk = G.themeIdx + ':' + s;
   if (V.spritesKey !== sk) {
     V.spritesKey = sk;
