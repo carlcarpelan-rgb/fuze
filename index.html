@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <title>Fuze</title>
-<meta http-equiv="refresh" content="0; url=dist/index.html">
+<script>
+  // add a unique query so the browser always fetches the newest game, not a cached copy
+  location.replace('dist/index.html?v=' + Date.now());
+</script>
+<noscript><meta http-equiv="refresh" content="0; url=dist/index.html"></noscript>
 </head>
 <body><a href="dist/index.html">Play Fuze</a></body>
 </html>
