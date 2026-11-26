@@ -36,7 +36,7 @@ function updateHud() {
   if (rr2 !== lastFuse) { lastFuse = rr2; $('fuse').style.setProperty('--r', rr2); }
   const tx = fmt(G.timeLeft);
   if (tx !== lastTxt) { lastTxt = tx; $('hudTime').textContent = tx; $('fuse').classList.toggle('urgent', G.timeLeft < 8 && G.mode === 'play'); }
-  $('fuse').classList.toggle('hit', G.fuseFlash > 0); $('fuse').classList.toggle('refill', G.refillT > 0);
+  $('fuse').classList.toggle('hit', G.fuseFlash > 0); $('fuse').classList.toggle('unlit', !G.lit && G.mode !== 'won' && G.mode !== 'lost'); $('fuse').classList.toggle('refill', G.refillT > 0);
 }
 document.addEventListener('click', e => { const b = e.target.closest('button'); if (b) b.blur(); });
 if (window.ResizeObserver) new ResizeObserver(() => layout()).observe(stageEl);
@@ -89,6 +89,8 @@ h1 { font-size: clamp(56px, 10vw, 120px); }
 .lv.boss .n::after { content: ' •'; color: #ff5340; }
 .fuse.hit .rope { box-shadow: 0 0 0 2px #ff5340, 0 0 16px #ff5340; }
 .fuse.hit b { color: #ff5340; }
+.fuse.unlit .spark { animation: none; opacity: 0; }
+.fuse.unlit b { opacity: .55; }
 .fuse.refill .rope { box-shadow: 0 0 0 2px #ffd166, 0 0 18px #ffb224; }
 </style>`);
 html = html.replace('/*__SCRIPT__*/', () => js);

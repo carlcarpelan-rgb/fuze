@@ -15,7 +15,7 @@ function loadLevel(idx) {
   G.gv = G.st.guards.map(() => ({ ox: 0, oy: 0, t: 1, d: MOVE_D, walk: 0, moving: 0, ko: 0, alert: 0, bx: 0, by: 0, bt: 1 }));
   G.history = []; G.particles.length = 0;
   G.shake = 0; G.flash = 0; G.alarm = 0; G.introT = 0; G.endT = 0; G.panelShown = false; G.loseKind = ''; G.fuseFlash = 0; G.refillT = 0;
-  G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {}; G.dinged = false;
+  G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {}; G.dinged = false; G.lit = false;
   G.motes = [];
   const rnd = mulberry32(idx * 31 + 7);
   for (let i = 0; i < 26; i++) G.motes.push({ x: rnd() * G.st.w, y: rnd() * G.st.h, ph: rnd() * TAU, sp: .5 + rnd(), sz: .5 + rnd() });
@@ -50,6 +50,7 @@ function doMove(d) {
     return false;
   }
   G.history.push({ st: snap, time: G.timeLeft });
+  G.lit = true; // the fuse catches on your first step: look as long as you like before that
   const ha = heroBase();
   h.ox = hb[0] - ha[0]; h.oy = hb[1] - ha[1]; h.t = 0; h.d = r.t === 'push' ? PUSH_D_T : MOVE_D; h.moving = 1;
   st.blocks.forEach((b, i) => { if (bd[i][0] !== b.x || bd[i][1] !== b.y) { const v = G.bv[i]; v.ox = bd[i][0] - b.x; v.oy = bd[i][1] - b.y; v.t = 0; v.d = PUSH_D_T; } });
@@ -144,9 +145,9 @@ function update(dt) {
     if (G.introT >= .7) { G.mode = 'play'; burst(st.px + .5, st.py + .85, 9, { a0: Math.PI, spread: Math.PI, sp: 2.2, life: .5, size: .18, col: '215,205,190', add: false, grow: .5, type: 'smoke' }); Snd.land(); }
   }
   if (G.mode === 'play') {
-    G.timeLeft -= dt;
+    if (G.lit) G.timeLeft -= dt;
     const sec = Math.ceil(G.timeLeft * (G.timeLeft < 5 ? 2 : 1));
-    if (G.timeLeft < 8 && sec !== G.lastBeep) { G.lastBeep = sec; Snd.beep(G.timeLeft < 4); }
+    if (G.lit && G.timeLeft < 8 && sec !== G.lastBeep) { G.lastBeep = sec; Snd.beep(G.timeLeft < 4); }
     if (h.t >= 1 && G.gv.every(v => v.t >= 1)) {
       let d = -1;
       if (Input.queue.length) d = Input.queue.shift();
