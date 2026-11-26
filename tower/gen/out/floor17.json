@@ -1,1 +1,1 @@
-{"floor":17,"theme":2,"boss":false,"lv":{"m":".E.../...X./..XX./...../X.X../.S...","guards":[{"path":[[1,1]],"face":2}]},"v":16.95,"seg":8,"used":1,"idle":0,"pushes":0,"steps":13,"time":3.9,"glass":0,"crushed":0,"takedowns":1,"rev":0,"moves":"RRUURUUULLDLU"}
+{"floor":17,"theme":2,"boss":false,"lv":{"m":"..E../....X/..XX./X..../X..X./.S...","guards":[{"path":[[2,3]],"face":2}]},"v":14.88,"seg":6,"used":1,"idle":0,"pushes":0,"steps":12,"time":3.6,"glass":0,"crushed":0,"takedowns":1,"rev":0,"alt":0,"moves":"RRRUULLLUURU"}

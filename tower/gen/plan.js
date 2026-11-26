@@ -19,13 +19,13 @@ module.exports = [
   { kind: 'push', theme: 1, seeds: 3, o: { w: 7, h: 8, crates: 8, minCrates: 6, maxCrates: 12, sym: 1, pillars: 4, minSeg: 10, iters: 1800, cap: 25000 } },
   { kind: 'push', theme: 1, seeds: 3, o: { w: 9, h: 8, crates: 8, minCrates: 6, maxCrates: 12, sym: 1, pillars: 4, minSeg: 11, iters: 1800, cap: 30000 } },
   { kind: 'push', theme: 1, seeds: 3, boss: true, o: { w: 9, h: 9, crates: 8, minCrates: 6, maxCrates: 12, sym: 1, symGlass: 1, pillars: 4, glass: 4, bomb: true, by: 1, minSeg: 12, iters: 1800, cap: 30000 } },
-  // Lobby: guards
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 5, h: 6, guards: 1, maxGuards: 1, kinds: ['post'], pillars: 2, wantTakedown: 1, maxSteps: 12, minDetour: 0, iters: 300 } },
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 6, h: 6, guards: 1, maxGuards: 1, kinds: ['patrol'], pillars: 3, maxSteps: 16, iters: 400 } },
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 6, h: 7, guards: 1, maxGuards: 2, kinds: ['patrol', 'post'], crates: 1, minCrates: 1, maxCrates: 2, pillars: 3, wantPush: 1, maxSteps: 22, iters: 500 } },
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 7, h: 7, guards: 1, maxGuards: 2, kinds: ['turner', 'post'], pillars: 3, maxCrates: 1, maxSteps: 24, needMoving: 1, iters: 500 } },
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 7, h: 7, guards: 2, maxGuards: 3, crates: 1, maxCrates: 2, pillars: 3, maxSteps: 30, needMoving: 1, iters: 600 } },
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 7, h: 8, guards: 2, maxGuards: 3, crates: 1, maxCrates: 2, pillars: 4, wantTakedown: 1, maxSteps: 36, needMoving: 2, iters: 700 } },
-  { kind: 'guards', theme: 2, seeds: 4, o: { w: 8, h: 8, guards: 3, maxGuards: 4, crates: 1, maxCrates: 3, pillars: 4, maxSteps: 42, needMoving: 2, iters: 700, cap: 80000 } },
-  { kind: 'guards', theme: 2, seeds: 4, boss: true, o: { w: 8, h: 9, guards: 3, maxGuards: 4, crates: 2, maxCrates: 4, pillars: 4, bomb: true, by: 1, maxSteps: 46, needMoving: 2, iters: 700, cap: 100000 } }
+  // Lobby: guards. One idea per floor, at most one guard on the move until the end of the part, and more than one way through.
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 5, h: 6, guards: 1, maxGuards: 1, kinds: ['post'], pillars: 2, wantTakedown: 1, maxSteps: 12, minDetour: 0, maxMoving: 0, altWeight: 4, iters: 300 } },
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 6, h: 6, guards: 1, maxGuards: 1, kinds: ['patrol'], pillars: 3, maxSteps: 16, maxMoving: 1, iters: 400 } },
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 6, h: 7, guards: 2, maxGuards: 2, kinds: ['post'], pillars: 3, maxSteps: 20, maxMoving: 0, iters: 500 } },
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 6, h: 7, guards: 1, maxGuards: 2, kinds: ['patrol', 'post'], crates: 1, minCrates: 1, maxCrates: 2, pillars: 3, wantPush: 1, maxSteps: 22, maxMoving: 1, iters: 500 } },
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 7, h: 7, guards: 2, maxGuards: 2, kinds: ['turner', 'post'], pillars: 3, maxCrates: 1, maxSteps: 24, needMoving: 1, maxMoving: 1, iters: 500 } },
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 7, h: 7, guards: 2, maxGuards: 3, crates: 1, maxCrates: 2, pillars: 3, maxSteps: 28, needMoving: 1, maxMoving: 1, wantTakedown: 1, iters: 600 } },
+  { kind: 'guards', theme: 2, seeds: 4, o: { w: 7, h: 8, guards: 3, maxGuards: 3, crates: 1, maxCrates: 2, pillars: 4, maxSteps: 32, needMoving: 1, maxMoving: 2, iters: 600 } },
+  { kind: 'guards', theme: 2, seeds: 4, boss: true, o: { w: 8, h: 8, guards: 3, maxGuards: 4, crates: 1, maxCrates: 3, pillars: 4, bomb: true, by: 1, maxSteps: 38, needMoving: 1, maxMoving: 2, iters: 600, cap: 80000 } }
 ];

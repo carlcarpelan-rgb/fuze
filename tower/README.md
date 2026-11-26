@@ -10,7 +10,7 @@ Part 1 (this build) has 24 floors in three parts of the tower:
 |---|---|---|
 | 1–8 | Garage | Parked cars roll only along their length, one bay per push (Rush Hour on foot). Broken windscreen glass costs fuse; a car rolled over it crushes it. |
 | 9–16 | Loading Dock | Crates go one step in any direction, as in Fuze. Mirror-symmetric floors. |
-| 17–24 | Lobby | Guards with torches: a short cone ahead and the squares beside them. Crates and columns hide you. Walk into a guard's back to knock him out. Patrols turn around at the end of their route or at anything in the way. |
+| 17–24 | Lobby | Guards see the square in front of them and the squares on either side, never behind. Crates and columns block the view. Walk into a guard's back to knock him out. Patrols turn around at the end of their route or at anything in the way. |
 
 Floors 8, 16 and 24 are bomb floors with a tighter fuse.
 

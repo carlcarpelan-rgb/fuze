@@ -223,7 +223,7 @@ function render() {
     for (let j = 0; j < cells.length; j += 2) {
       const ci = cells[j], kk = cells[j + 1];
       seen.add(ci);
-      const x = ci % st.w, y = (ci - x) / st.w, a = kk === 0 ? .3 : .5 - (kk - 1) * .08, col = caughtNow ? '255,70,60,' : '255,220,120,';
+      const x = ci % st.w, y = (ci - x) / st.w, a = kk === 0 ? .42 : .5, col = caughtNow ? '255,70,60,' : '255,220,120,';
       c.fillStyle = 'rgba(' + col + a + ')';
       rr(c, ox + x * s + s * .05, oy + y * s + s * .05, s * .9, s * .9, s * .12); c.fill();
       c.strokeStyle = 'rgba(' + col + (a + .25) + ')'; c.lineWidth = Math.max(1, s * .02); c.stroke();

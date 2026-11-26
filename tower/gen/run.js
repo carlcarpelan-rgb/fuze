@@ -13,7 +13,7 @@ for (const n of floors) {
   const prev = path.join(__dirname, 'out', 'floor' + n + '.json');
   if (fs.existsSync(prev) && JSON.parse(fs.readFileSync(prev, 'utf8')).v > best.s.v && !process.env.FORCE) { console.log('floor', n, 'kept the earlier, better floor'); continue; }
   const s = best.s;
-  const out = { floor: n, theme: sp.theme, boss: !!sp.boss, lv: s.lv, v: s.v, seg: s.seg, used: s.used, idle: s.idle, pushes: s.r.pushes, steps: s.r.steps, time: s.r.time, glass: s.r.glass, crushed: s.r.crushed, takedowns: s.r.takedowns, rev: s.rev, moves: s.r.moves };
+  const out = { floor: n, theme: sp.theme, boss: !!sp.boss, lv: s.lv, v: s.v, seg: s.seg, used: s.used, idle: s.idle, pushes: s.r.pushes, steps: s.r.steps, time: s.r.time, glass: s.r.glass, crushed: s.r.crushed, takedowns: s.r.takedowns, rev: s.rev, alt: s.alt, moves: s.r.moves };
   fs.writeFileSync(path.join(__dirname, 'out', 'floor' + n + '.json'), JSON.stringify(out));
   console.log('floor', n, 'seg', s.seg, 'pushes', s.r.pushes, 'steps', s.r.steps, 'v', s.v.toFixed(1), ((Date.now() - t0) / 1000).toFixed(0) + 's');
   console.log(s.lv.m.split('/').join('\n'), JSON.stringify(s.lv.cars || s.lv.guards || ''));

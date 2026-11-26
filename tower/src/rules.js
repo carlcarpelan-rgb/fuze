@@ -8,8 +8,7 @@
 //                     a push from the side does nothing.
 //   guards [{path:[[x,y],...], face, look:[faces]}]  walk the path back and forth, one step per player step.
 //                     A guard standing still can turn through `look`, one entry per player step.
-//                     A guard sees a short cone ahead (1 cell, then 3 wide for two more) and the cells right beside him.
-//                     Crates, cars, pillars and the lift hide what is behind them. He never sees behind his back.
+//                     A guard sees the square in front of him and the squares on either side. Never behind his back.
 //                     Walking into his back knocks him out.
 //   lasers [{x,y,d}]  fire from a cell in direction d (0 up, 1 down, 2 left, 3 right) until something solid.
 (function (root) {
@@ -66,27 +65,16 @@
   // things you cannot see through
   const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i];
 
-  // A guard's view, as [cell, k] pairs (k = how far ahead, 0 = beside him).
-  //   . c .      k=3
-  //   . c .      k=2      a cell further out is hidden when the cell between it and the guard is solid
-  //     c        k=1
-  //   c G c      k=0      (beside him)
+  // A guard's view, as [cell, k] pairs (k = 1 ahead, 0 beside him): the square in front and the squares on either side.
+  //     c
+  //   c G c
+  // He never sees behind his back. Crates, cars, pillars and the lift are solid, so he does not see "into" them.
   function sight(st, g) {
     const out = []; if (!g.alive) return out;
-    const fx = DX[g.face], fy = DY[g.face], lx = -fy, ly = fx; // forward and sideways
+    const fx = DX[g.face], fy = DY[g.face], lx = -fy, ly = fx;
     const cell = (k, l) => { const x = g.x + fx * k + lx * l, y = g.y + fy * k + ly * l; return inB(st, x, y) ? y * st.w + x : -1; };
     const see = (i, k) => { if (i >= 0 && !opaque(st, i)) out.push(i, k); };
-    see(cell(0, -1), 0); see(cell(0, 1), 0);
-    const c1 = cell(1, 0);
-    if (c1 < 0 || opaque(st, c1)) return out;
-    out.push(c1, 1);
-    for (const l of [-1, 0, 1]) {
-      const side = l ? cell(1, l) : c1, c2 = cell(2, l);
-      if (c2 < 0 || (l && (side < 0 || opaque(st, side))) || opaque(st, c2)) continue;
-      out.push(c2, 2);
-      const c3 = cell(3, l);
-      if (c3 >= 0 && !opaque(st, c3)) out.push(c3, 3);
-    }
+    see(cell(0, -1), 0); see(cell(1, 0), 1); see(cell(0, 1), 0);
     return out;
   }
   function sees(st, g, ci) { const s = sight(st, g); for (let j = 0; j < s.length; j += 2) if (s[j] === ci) return true; return false; }

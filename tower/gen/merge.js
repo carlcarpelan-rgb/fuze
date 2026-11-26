@@ -5,7 +5,7 @@ const fs = require('fs'), path = require('path');
 const NAMES = [
   'Double parked', 'Tight squeeze', 'Reverse in', 'Gridlock', 'Windscreens', 'Valet parking', 'Rush hour', 'Under the ramp',
   'Deliveries', 'Stacked', 'Fragile', 'This way up', 'Broken bottles', 'Overtime', 'Shipping lane', 'Special delivery',
-  'Night porter', 'The rounds', 'Out of sight', 'Back to back', 'Two shifts', 'Lights out', 'Front desk', 'Grand opening'
+  'Night porter', 'The rounds', 'Back to back', 'Out of sight', 'Revolving door', 'Two shifts', 'Front desk', 'Grand opening'
 ];
 const MULT = [3.2, 2.7, 2.5, 2.3, 2.2, 2.1, 2.0, 1.75], BASE = [8, 6, 5, 5, 4, 4, 4, 3];
 const out = [], sols = [];
@@ -22,7 +22,9 @@ for (let j = 0; j < order.length; j++) {
   const f = path.join(__dirname, 'out', 'floor' + n + '.json');
   if (!fs.existsSync(f)) continue;
   const d = JSON.parse(fs.readFileSync(f, 'utf8')), k = j % 8;
-  const lv = Object.assign({ name: NAMES[n - 1], theme: d.theme }, d.boss ? { boss: true } : {}, { t: Math.ceil(d.time * MULT[k] + BASE[k]) }, d.lv);
+  // guard floors are thought through while playing, not before the first step: more fuse
+  const extra = d.theme === 2 ? .6 : 0;
+  const lv = Object.assign({ name: NAMES[n - 1], theme: d.theme }, d.boss ? { boss: true } : {}, { t: Math.ceil(d.time * (MULT[k] + extra) + BASE[k] + (extra ? 3 : 0)) }, d.lv);
   out.push(lv); sols.push(d.moves);
 }
 const txt = '[\n' + out.map(l => '  ' + JSON.stringify(l)).join(',\n') + '\n]\n';

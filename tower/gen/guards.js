@@ -89,13 +89,27 @@ function scorer(o) {
     const moving = p.guards.filter(g => g.path.length > 1 || (g.look && g.look.length > 1)).length;
     let v = detour * 1.6 + r.steps * .25 + r.takedowns * (o.takedown || 3) + Math.min(r.pushes, 6) * .8 - pill * .12 - p.crates.length * .5 - idle * 5;
     if (o.needMoving && moving < o.needMoving) v -= (o.needMoving - moving) * 7;
+    if (o.maxMoving != null && moving > o.maxMoving) v -= (moving - o.maxMoving) * 9;
+    // forgiving: block one square of the best route at a time; a good floor still has another way nearly as quick
+    let alt = 0, tried = 0;
+    { let x = p.start[0], y = p.start[1]; const seen = new Set();
+      for (let i = 0; i < r.moves.length - 1; i++) {
+        const d = 'UDLR'.indexOf(r.moves[i]); x += [0, 0, -1, 1][d]; y += [-1, 1, 0, 0][d];
+        const ci = y * p.w + x; if (seen.has(ci) || p.cell[ci] !== 0 || p.crates.some(c => c[0] === x && c[1] === y) || p.guards.some(g => g.path.some(q => q[0] === x && q[1] === y))) continue;
+        seen.add(ci); tried++;
+        const q = Object.assign({}, p, { cell: p.cell.slice() }); q.cell[ci] = 1;
+        const ra = S.solve(encode(q), { cap: 20000 });
+        if (ra && !ra.overflow && ra.steps <= r.steps + (o.altSlack || 6)) alt++;
+      } }
+    const altFrac = tried ? alt / tried : 0;
+    v += altFrac * (o.altWeight || 14);
     // stepping back and forth to wait for a guard is legal, but a floor built on it is dull
     let rev = 0; for (let i = 1; i < r.moves.length; i++) if ('UDLR'.indexOf(r.moves[i]) === ('UDLR'.indexOf(r.moves[i - 1]) ^ 1)) rev++;
     v -= rev * (o.revCost || 2.2);
     if (o.wantTakedown && !r.takedowns) v -= 8;
     if (o.wantPush && !r.pushes) v -= 8;
     if (o.maxSteps && r.steps > o.maxSteps) v -= (r.steps - o.maxSteps) * 1.5;
-    return { v, r, r0, detour, rev, lv, seg: detour, used: p.guards.length, idle };
+    return { v, r, r0, detour, rev, lv, seg: detour, used: p.guards.length, idle, alt: altFrac };
   };
 }
 function make(seed, o) {
