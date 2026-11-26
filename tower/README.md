@@ -1,25 +1,29 @@
-# Fuze Tower (prototype)
+# Fuze Tower
 
-A first playable build of the follow-up to Fuze: a push-the-walls puzzle with stealth, set in a tower taken over on Christmas Eve.
+The follow-up to Fuze: push, sneak and ride the lift up through a tower that has been wired to blow.
+Every floor is a puzzle with a lift as the exit; every eighth floor has a bomb instead.
 Design notes live in the design document; this folder holds the code.
 
-Eight hand-drawn floors, each introducing one thing:
+Part 1 (this build) has 24 floors in three parts of the tower:
 
-| Floor | Name | New |
+| Floors | Part | Puzzle |
 |---|---|---|
-| 1 | Parking level | Reach the lift, push a crate |
-| 2 | Night shift | A guard who walks when you walk |
-| 3 | Cover | Push a crate into a guard's line of sight |
-| 4 | From behind | Knock a guard out by walking into him from behind |
-| 5 | Tripwire | Push a crate into a laser beam |
-| 6 | Broken glass | Glass costs 3 s of fuse; a pushed crate crushes it |
-| 7 | Long way up | A spare fuse refills the fuse |
-| 8 | Christmas party | Guard, laser and a bomb as the goal |
+| 1–8 | Garage | Parked cars roll only along their length, one bay per push (Rush Hour on foot). Broken windscreen glass costs fuse; a car rolled over it crushes it. |
+| 9–16 | Loading Dock | Crates go one step in any direction, as in Fuze. Mirror-symmetric floors. |
+| 17–24 | Lobby | Guards with torches: a short cone ahead and the squares beside them. Crates and columns hide you. Walk into a guard's back to knock him out. Patrols turn around at the end of their route or at anything in the way. |
+
+Floors 8, 16 and 24 are bomb floors with a tighter fuse.
 
 ```sh
-node tower/solve.js   # solve every floor within its fuse, write tower/levels/solutions.json
-node tower/build.js   # build tower/dist/index.html
-node tower/test.js    # play every solution in Chrome through the real game
+node tower/gen/run.js 1,2,3          # generate floors (best of a few seeds) into tower/gen/out/
+node tower/gen/merge.js              # order them, set the fuse, write tower/levels/levels.json
+node tower/solve.js                  # solve every floor within its fuse, write tower/levels/solutions.json
+node tower/build.js                  # build tower/dist/index.html
+node tower/test.js [m] [1,5]         # play every solution in Chrome (m: phone size), screenshots of floors 1 and 5
 ```
+
+`tower/gen/plan.js` lists what each floor should be. The generators climb towards floors that need many separate pushes
+(garage, dock) or long detours around guards (lobby), and reject floors that can be solved without the part's mechanic.
+The fuse is the best possible time for a quick player times a factor that tightens through each part.
 
 The build reuses Fuze's drawing helpers, engine frame, sound, input, music and platform code from `src/` unchanged.

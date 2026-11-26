@@ -8,3 +8,4 @@ gen/pool*.json
 gen/scrolls.json
 gen/scrolls3.json
 gen/g3run*.log
+tower/gen/out/*.log

@@ -14,12 +14,14 @@ Object.assign(Snd, {
   glass() { this.noise(.22, .45, 7000, 2500, 'highpass'); this.tone(1900, .08, 'triangle', .06, 1200); this.tone(180, .12, 'square', .1, 90); },
   takedown() { this.noise(.12, .5, 700, 120); this.tone(110, .18, 'sine', .45, 50); this.tone(880, .06, 'triangle', .06, 1300, .12); },
   refill() { [523, 784, 1047].forEach((f, i) => this.tone(f, .14, 'triangle', .16, f * 1.5, i * .06)); this.noise(.3, .1, 6000, 2500, 'highpass'); },
+  roll() { this.noise(.22, .3, 500, 140); this.tone(70, .2, 'sine', .25, 55); },
+  ding() { this.tone(1319, .5, 'sine', .16, 1319); this.tone(1047, .7, 'sine', .14, 1047, .16); },
   alarm() { for (let i = 0; i < 4; i++) { this.tone(880, .18, 'square', .12, 660, i * .25); this.tone(660, .07, 'square', .08, 880, i * .25 + .18); } }
 });
 
 function setHud() {
   $('hudWorld').textContent = G.theme.name;
-  $('hudLevel').textContent = 'Floor ' + (G.idx + 1);
+  $('hudLevel').textContent = (LEVELS[G.idx].boss ? 'Bomb · ' : '') + 'Floor ' + (G.idx + 1);
   $('hudPush').hidden = true; $('hudArc').hidden = true; $('btnUndo').hidden = false;
   app.style.setProperty('--acc', G.theme.accent);
 }
@@ -32,7 +34,7 @@ function startLevel(i) {
   loadLevel(i);
   G.mode = 'intro';
   Platform.levelsThisSession++;
-  Music.set({ world: G.L.theme === 0 ? 8 : 9, boss: i === LEVELS.length - 1 });
+  Music.set({ world: [8, 2, 1, 9][G.L.theme] || 8, boss: !!LEVELS[i].boss });
   setHud();
   requestAnimationFrame(() => layout(true));
 }
@@ -51,14 +53,21 @@ function showSelect() {
   if (G.mode !== 'title') G.mode = 'title';
   Music.set({ world: 8, menu: true });
   const nx = nextIdx();
-  let cells = '';
-  LEVELS.forEach((lv, i) => {
-    const open = isOpen(i), done = !!Save.d.done[i];
-    const cls = 'lv' + (open ? '' : ' locked') + (done ? ' done' : '') + (open && i === nx ? ' next' : '');
-    cells += '<button class="' + cls + '" data-i="' + i + '"' + (open ? '' : ' disabled') + ' aria-label="Floor ' + (i + 1) + (open ? '' : ', locked') + '">' +
-      '<span class="n">' + (i + 1) + '</span>' + (open ? '<span class="fname">' + lv.name + '</span>' : ICON.lock) + '</button>';
-  });
-  $('worlds').innerHTML = '<section class="world" style="--acc:#ffd166"><header><small>Prototype</small><h3>The tower</h3><em>Garage to the twelfth floor</em><b>' + Object.keys(Save.d.done).length + ' / ' + LEVELS.length + '</b></header><div class="lgrid">' + cells + '</div></section>';
+  // one section per part of the tower, eight floors each
+  let html = '';
+  for (let a = 0; a < LEVELS.length; a += 8) {
+    const th = TTHEMES[LEVELS[a].theme | 0];
+    let cells = '', done = 0;
+    for (let i = a; i < Math.min(a + 8, LEVELS.length); i++) {
+      const lv = LEVELS[i], open = isOpen(i), dn = !!Save.d.done[i];
+      if (dn) done++;
+      const cls = 'lv' + (open ? '' : ' locked') + (dn ? ' done' : '') + (open && i === nx ? ' next' : '') + (lv.boss ? ' boss' : '');
+      cells += '<button class="' + cls + '" data-i="' + i + '"' + (open ? '' : ' disabled') + ' aria-label="Floor ' + (i + 1) + (lv.boss ? ', bomb' : '') + (open ? '' : ', locked') + '">' +
+        '<span class="n">' + (i + 1) + '</span>' + (open ? '<span class="fname">' + lv.name + '</span>' : ICON.lock) + '</button>';
+    }
+    html += '<section class="world" style="--acc:' + th.accent + '"><header><small>Floors ' + (a + 1) + ' to ' + Math.min(a + 8, LEVELS.length) + '</small><h3>' + th.name + '</h3><em>' + th.sub + '</em><b>' + done + ' / ' + Math.min(8, LEVELS.length - a) + '</b></header><div class="lgrid">' + cells + '</div></section>';
+  }
+  $('worlds').innerHTML = html;
   $('selTotal').textContent = '';
   $('chkAll').checked = !!Save.d.all;
 }
@@ -89,7 +98,7 @@ function onWin() {
 function showResult() {
   const i = G.idx, last = i === LEVELS.length - 1, kick = G.theme.name + ' · floor ' + (i + 1);
   if (G.mode === 'won') {
-    if (last) return panel({ kick: 'All ' + LEVELS.length + ' floors cleared', title: 'Prototype complete', cls: 'good', body: 'That is everything in this first build. The real game climbs all the way to the roof.',
+    if (last) return panel({ kick: 'All ' + LEVELS.length + ' floors cleared', title: 'So far, so good', cls: 'good', body: 'That is every floor in this build. The rest of the tower is on its way.',
       btns: [{ label: 'Floors', primary: true, go: showSelect }, { label: 'Play again', retry: true, go: () => startLevel(i) }] });
     return panel({ kick, title: G.goalHit === 'bomb' ? 'Defused' : 'Going up', cls: 'good', body: '<b>' + fmt(G.timeLeft) + ' s</b> left on the fuse.',
       btns: [{ label: 'Next floor', primary: true, go: () => Platform.breakThen(() => startLevel(i + 1)) }, { label: 'Play again', retry: true, go: () => startLevel(i) }, { label: 'Floors', go: showSelect }] });

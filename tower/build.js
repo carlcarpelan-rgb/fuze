@@ -66,24 +66,27 @@ const fonts = '<style>' + [face('Saira Stencil One', 400, 'saira-stencil-one-lat
 let html = rd('src/template.html');
 const sub = (a, b) => { if (!html.includes(a)) throw new Error('template text missing: ' + a.slice(0, 60)); html = html.replace(a, () => b); };
 html = html.replace(/<link rel="preconnect"[^>]*>\s*<link href="https:\/\/fonts\.googleapis\.com[^>]*>/, () => fonts);
-sub('<title>Fuze</title>', '<title>Fuze Tower (prototype)</title>');
-sub('<div class="kick">Push walls · Beat the spark</div>', '<div class="kick">Prototype · 8 floors</div>');
+sub('<title>Fuze</title>', '<title>Fuze Tower</title>');
+sub('<div class="kick">Push walls · Beat the spark</div>', '<div class="kick">Push · Sneak · Ride up</div>');
 sub('<h1>FUZE</h1>', '<h1>FUZE<br>TOWER</h1>');
 sub('<p class="tag">Someone has hidden bombs in the tunnels under the city. You have a maze, a burning fuse and two hands to push with.</p>',
-  '<p class="tag">The tower has been taken on Christmas Eve. Push, sneak past the guards and take the lift up before the fuse burns down.</p>');
+  '<p class="tag">Someone has wired the tower to blow. Clear a way to the lift on every floor, slip past the guards and climb before the fuse burns down.</p>');
 sub('id="btnSelect">Choose level</button>', 'id="btnSelect">Choose floor</button>');
 sub('<button class="btn" id="btnArcade">Arcade, 3 tries</button>', '');
 sub('<h2>Levels</h2>', '<h2>Floors</h2>');
 sub('<span>The more fuse you have left, the more stars you get. Clear a level in the fewest possible pushes to earn its medal.</span>', '<span></span>');
 sub('<input type="checkbox" id="chkAll"> Unlock all levels', '<input type="checkbox" id="chkAll"> Unlock all floors');
-html = html.replace(/id="titleFoot">[^<]*</, 'id="titleFoot">Prototype · R restart · Z undo · P pause · M sound<');
+html = html.replace(/id="titleFoot">[^<]*</, 'id="titleFoot">R restart · Z undo · P pause · M sound<');
 sub('</style>', `
 .how { display: none; }
 h1 { font-size: clamp(56px, 10vw, 120px); }
-.lv { aspect-ratio: auto; min-height: 92px; padding: 10px 6px; }
+.lv { aspect-ratio: auto !important; height: 96px; min-height: 0; padding: 10px 6px; }
 .lv .fname { font-size: 13px; font-weight: 600; color: var(--muted); text-align: center; line-height: 1.1; }
 .lv.next .fname { color: #3a2400; }
 .lgrid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+@media (min-width: 760px) { .lgrid { grid-template-columns: repeat(8, minmax(0, 1fr)) !important; } .lv { height: 110px; } }
+.lv.boss { box-shadow: inset 0 0 0 2px #ff5340; }
+.lv.boss .n::after { content: ' •'; color: #ff5340; }
 .fuse.hit .rope { box-shadow: 0 0 0 2px #ff5340, 0 0 16px #ff5340; }
 .fuse.hit b { color: #ff5340; }
 .fuse.refill .rope { box-shadow: 0 0 0 2px #ffd166, 0 0 18px #ffb224; }

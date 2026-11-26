@@ -11,10 +11,11 @@ function loadLevel(idx) {
   G.time = lv.t; G.timeLeft = lv.t;
   G.hero = { dir: 1, walk: 0, moving: 0, push: 0, ox: 0, oy: 0, t: 1, d: MOVE_D, bx: 0, by: 0, bt: 1, sx: 1, sy: 1, lift: 0, alpha: 1 };
   G.bv = G.st.blocks.map((b, i) => ({ v: (i * 5 + idx * 3 + b.x + b.y) % 6, ox: 0, oy: 0, t: 1, d: .1, shake: 0 }));
+  G.cv = G.st.cars.map((c, i) => ({ col: (G.L.cars[i].v || (i * 3 + idx * 5 + c.x * 7 + c.y)) % CAR_COLS.length, ox: 0, oy: 0, t: 1, d: .1, shake: 0 }));
   G.gv = G.st.guards.map(() => ({ ox: 0, oy: 0, t: 1, d: MOVE_D, walk: 0, moving: 0, ko: 0, alert: 0, bx: 0, by: 0, bt: 1 }));
   G.history = []; G.particles.length = 0;
   G.shake = 0; G.flash = 0; G.alarm = 0; G.introT = 0; G.endT = 0; G.panelShown = false; G.loseKind = ''; G.fuseFlash = 0; G.refillT = 0;
-  G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {};
+  G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {}; G.dinged = false;
   G.motes = [];
   const rnd = mulberry32(idx * 31 + 7);
   for (let i = 0; i < 26; i++) G.motes.push({ x: rnd() * G.st.w, y: rnd() * G.st.h, ph: rnd() * TAU, sp: .5 + rnd(), sz: .5 + rnd() });
@@ -28,6 +29,7 @@ function heroDrawn() {
   return [G.st.px + h.ox * k + h.bx * bump, G.st.py + h.oy * k + h.by * bump];
 }
 function blockDrawn(i) { const b = G.st.blocks[i], v = G.bv[i], k = 1 - easeOut(v.t); return [b.x + v.ox * k, b.y + v.oy * k]; }
+function carDrawn(i) { const b = G.st.cars[i], v = G.cv[i], k = 1 - easeOut(v.t); return [b.x + v.ox * k, b.y + v.oy * k]; }
 function guardDrawn(i) {
   const g = G.st.guards[i], v = G.gv[i], k = 1 - easeOut(v.t), bump = v.bt < 1 ? Math.sin(v.bt * Math.PI) * .35 : 0;
   return [g.x + v.ox * k + v.bx * bump, g.y + v.oy * k + v.by * bump];
@@ -37,12 +39,13 @@ function guardDrawn(i) {
 function doMove(d) {
   const st = G.st, h = G.hero, dx = TowerRules.DX[d], dy = TowerRules.DY[d];
   h.dir = d;
-  const hb = heroDrawn(), bd = st.blocks.map((_, i) => blockDrawn(i)), gd = st.guards.map((_, i) => guardDrawn(i));
+  const hb = heroDrawn(), bd = st.blocks.map((_, i) => blockDrawn(i)), cd = st.cars.map((_, i) => carDrawn(i)), gd = st.guards.map((_, i) => guardDrawn(i));
   const snap = TowerRules.clone(st);
   const r = TowerRules.step(st, d);
   if (r.t === 'blocked') {
     h.bx = dx; h.by = dy; h.bt = 0; G.blockCool = .26; G.blockDir = d;
     if (r.block != null) G.bv[r.block].shake = 1;
+    if (r.car != null) G.cv[r.car].shake = 1;
     Snd.bump();
     return false;
   }
@@ -50,11 +53,13 @@ function doMove(d) {
   const ha = heroBase();
   h.ox = hb[0] - ha[0]; h.oy = hb[1] - ha[1]; h.t = 0; h.d = r.t === 'push' ? PUSH_D_T : MOVE_D; h.moving = 1;
   st.blocks.forEach((b, i) => { if (bd[i][0] !== b.x || bd[i][1] !== b.y) { const v = G.bv[i]; v.ox = bd[i][0] - b.x; v.oy = bd[i][1] - b.y; v.t = 0; v.d = PUSH_D_T; } });
+  st.cars.forEach((b, i) => { if (cd[i][0] !== b.x || cd[i][1] !== b.y) { const v = G.cv[i]; v.ox = cd[i][0] - b.x; v.oy = cd[i][1] - b.y; v.t = 0; v.d = PUSH_D_T * 1.3; } });
   st.guards.forEach((g, i) => { const v = G.gv[i]; if (gd[i][0] !== g.x || gd[i][1] !== g.y) { v.ox = gd[i][0] - g.x; v.oy = gd[i][1] - g.y; v.t = 0; v.d = MOVE_D * 1.1; v.moving = 1; } });
   if (r.t === 'push') {
-    h.push = 1; const b = st.blocks[r.block];
-    dust(b.x + .5 - dx * .5, b.y + .55 - dy * .5, dx, dy); Snd.push();
-    if (r.crushed != null) { const cx = r.crushed % st.w, cy = (r.crushed - cx) / st.w; glassBurst(cx + .5, cy + .5, 16); Snd.crunch(); }
+    h.push = 1;
+    if (r.car != null) { const cr = st.cars[r.car]; dust(st.px + .5 + dx * .5, st.py + .55 + dy * .5, dx, dy); Snd.roll(); }
+    else { const b = st.blocks[r.block]; dust(b.x + .5 - dx * .5, b.y + .55 - dy * .5, dx, dy); Snd.push(); }
+    if (r.crushed) for (const ci of r.crushed) { const cx = ci % st.w, cy = (ci - cx) / st.w; glassBurst(cx + .5, cy + .5, 16); Snd.crunch(); }
   } else if (r.t === 'takedown') {
     G.gv[r.g].ko = .001; G.shake = Math.max(G.shake, .35); Snd.takedown();
     burst(st.px + .5, st.py + .4, 10, { sp: 3, life: .4, size: .12, col: '255,240,200', drag: 3, type: 'spark' });
@@ -69,10 +74,11 @@ function doMove(d) {
 function undo() {
   if (G.mode !== 'play' || !G.history.length) return false;
   const sn = G.history.pop(), h = G.hero;
-  const hb = heroDrawn(), bd = G.st.blocks.map((_, i) => blockDrawn(i)), gd = G.st.guards.map((_, i) => guardDrawn(i));
+  const hb = heroDrawn(), bd = G.st.blocks.map((_, i) => blockDrawn(i)), cd = G.st.cars.map((_, i) => carDrawn(i)), gd = G.st.guards.map((_, i) => guardDrawn(i));
   G.st = Object.assign(sn.st, { vw: G.st.w, scroll: false, cam: 0 });
   const st = G.st;
   st.blocks.forEach((b, i) => { const v = G.bv[i]; if (bd[i][0] !== b.x || bd[i][1] !== b.y) { v.ox = bd[i][0] - b.x; v.oy = bd[i][1] - b.y; v.t = 0; v.d = .12; } });
+  st.cars.forEach((b, i) => { const v = G.cv[i]; if (cd[i][0] !== b.x || cd[i][1] !== b.y) { v.ox = cd[i][0] - b.x; v.oy = cd[i][1] - b.y; v.t = 0; v.d = .12; } });
   st.guards.forEach((g, i) => { const v = G.gv[i]; if (g.alive) v.ko = 0; if (gd[i][0] !== g.x || gd[i][1] !== g.y) { v.ox = gd[i][0] - g.x; v.oy = gd[i][1] - g.y; v.t = 0; v.d = .12; } });
   h.ox = hb[0] - st.px; h.oy = hb[1] - st.py; h.t = 0; h.d = .1; h.moving = 1;
   Snd.undo();
@@ -115,7 +121,7 @@ function update(dt) {
   h.bt = Math.min(1, h.bt + dt / .15);
   if (h.t < 1) h.walk += dt * 4.4;
   else { h.moving = Math.max(0, h.moving - dt * 9); h.push = Math.max(0, h.push - dt * 7); }
-  for (const v of G.bv) { if (v.t < 1) v.t = Math.min(1, v.t + dt / v.d); if (v.shake > 0) v.shake = Math.max(0, v.shake - dt * 7); }
+  for (const v of G.bv.concat(G.cv)) { if (v.t < 1) v.t = Math.min(1, v.t + dt / v.d); if (v.shake > 0) v.shake = Math.max(0, v.shake - dt * 7); }
   for (const v of G.gv) {
     if (v.t < 1) { v.t = Math.min(1, v.t + dt / v.d); v.walk += dt * 4.4; } else v.moving = Math.max(0, v.moving - dt * 9);
     if (v.ko > 0 && v.ko < 1) v.ko = Math.min(1, v.ko + dt * 5);
@@ -148,7 +154,7 @@ function update(dt) {
         // a held key keeps walking over open floor, but never pushes, never walks into a guard
         d = Input.held[Input.held.length - 1];
         const tx = st.px + TowerRules.DX[d], ty = st.py + TowerRules.DY[d], ti = ty * st.w + tx;
-        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.wall[ti] || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
+        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
       }
       if (d >= 0) doMove(d);
     }
@@ -156,7 +162,7 @@ function update(dt) {
   }
   if (G.mode === 'won') {
     G.endT += dt;
-    if (G.goalHit === 'lift') { G.liftIn = easeInOut(Math.min(1, G.endT / .45)); h.walk += dt * 4; h.moving = G.endT < .45 ? 1 : 0; }
+    if (G.goalHit === 'lift') { G.liftIn = easeInOut(Math.min(1, G.endT / .4)); h.walk += dt * 4; h.moving = G.endT < .4 ? 1 : 0; if (G.endT > .55 && !G.dinged) { G.dinged = true; Snd.ding(); } }
     else h.lift = Math.abs(Math.sin(Math.min(G.endT, .9) / .9 * Math.PI * 2)) * .16;
     if (!G.panelShown && G.endT > 1.05) { G.panelShown = true; showResult(); }
   } else if (G.mode === 'lost') {
@@ -174,7 +180,16 @@ function towerSprites() {
   const s = V.s, rnd = mulberry32(777 + G.themeIdx);
   V.glassS = []; for (let i = 0; i < 4; i++) { const cvs = mkCanvas(s, s); paintGlass(cvs.getContext('2d'), s, rnd); V.glassS.push(cvs); }
   V.crateS = []; for (let i = 0; i < 6; i++) { const cvs = mkCanvas(s, s + V.hh); paintWall(cvs.getContext('2d'), s, V.hh, G.theme.wall, rnd); V.crateS.push(cvs); }
+  V.colS = mkCanvas(s, s + V.hh); paintColumn(V.colS.getContext('2d'), s, V.hh, G.theme);
+  V.carS = {};
 }
+
+function carSprite(h, col) {
+  const k = h + ':' + col;
+  if (!V.carS[k]) { const s = V.s, cvs = h ? mkCanvas(s * 2, s + V.hh) : mkCanvas(s, s * 2 + V.hh); paintCar(cvs.getContext('2d'), s, V.hh, h, CAR_COLS[col], mulberry32(col)); V.carS[k] = cvs; }
+  return V.carS[k];
+}
+const LIFT_H = .62; // the lift's front, as a part of a cell
 
 /* ---------- render ---------- */
 const items = [];
@@ -197,21 +212,23 @@ function render() {
   let sg = c.createLinearGradient(0, oy, 0, oy + s * .45);
   sg.addColorStop(0, 'rgba(0,0,0,.5)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
   c.fillStyle = sg; c.fillRect(ox, oy, C * s, s * .45);
-  // glass, lift pads, spare fuses
+  // glass and spare fuses
   for (let i = 0; i < st.glass.length; i++) if (st.glass[i]) { const x = i % st.w, y = (i - x) / st.w; c.drawImage(V.glassS[(x * 3 + y) % 4], ox + x * s, oy + y * s); }
-  for (let i = 0; i < st.goal.length; i++) if (st.goal[i] === 1) { const x = i % st.w, y = (i - x) / st.w; drawLiftSill(c, ox + x * s, oy + y * s, s); }
-  // what the guards can see: lit floor, so danger reads at a glance
-  const seen = new Set();
+  // what the guards can see: lit floor, brightest close to him, so danger reads at a glance
+  const seen = new Set(), caughtNow = G.mode === 'lost' && G.loseKind === 'caught';
   st.guards.forEach((g, k) => {
     if (!g.alive) return;
     const cells = TowerRules.sight(st, g);
-    cells.forEach((ci, j) => {
+    for (let j = 0; j < cells.length; j += 2) {
+      const ci = cells[j], kk = cells[j + 1];
       seen.add(ci);
-      const x = ci % st.w, y = (ci - x) / st.w, a = .32 * Math.max(.35, 1 - j * .09);
-      c.fillStyle = G.mode === 'lost' && G.loseKind === 'caught' ? 'rgba(255,70,60,' + a + ')' : 'rgba(255,226,140,' + a + ')';
-      c.fillRect(ox + x * s + 1, oy + y * s + 1, s - 2, s - 2);
-    });
+      const x = ci % st.w, y = (ci - x) / st.w, a = kk === 0 ? .3 : .5 - (kk - 1) * .08, col = caughtNow ? '255,70,60,' : '255,220,120,';
+      c.fillStyle = 'rgba(' + col + a + ')';
+      rr(c, ox + x * s + s * .05, oy + y * s + s * .05, s * .9, s * .9, s * .12); c.fill();
+      c.strokeStyle = 'rgba(' + col + (a + .25) + ')'; c.lineWidth = Math.max(1, s * .02); c.stroke();
+    }
   });
+  if (G.mode === 'play' || G.mode === 'intro' || G.mode === 'title') st.guards.forEach(g => drawGuardPlan(c, ox, oy, s, g, t, .9));
   // laser beams also mark the floor, so it is clear which squares are live
   st.lasers.forEach(l => {
     TowerRules.beam(st, l).forEach(ci => {
@@ -230,6 +247,13 @@ function render() {
     c.drawImage(V.shadow, px - V.shPad + s * .13, py - V.shPad + s * .13);
     items.push({ y: p[1], k: 0, x: px, py, v: v.v });
   });
+  st.cars.forEach((cr, i) => {
+    const p = carDrawn(i), v = G.cv[i];
+    let px = ox + p[0] * s, py = oy + p[1] * s;
+    if (v.shake > 0) { const m = Math.sin(v.shake * 20) * v.shake * s * .04; if (cr.h) py += m * .5; else px += m * .5; }
+    c.fillStyle = 'rgba(0,0,0,.35)'; rr(c, px + s * .1, py + s * .16, cr.h ? s * 1.9 : s * .9, cr.h ? s * .9 : s * 1.9, s * .2); c.fill();
+    items.push({ y: p[1] + (cr.h ? 0 : 1), k: 6, x: px, py, h: cr.h, col: v.col });
+  });
   for (let i = 0; i < st.wall.length; i++) if (st.wall[i]) {
     const x = i % st.w, y = (i - x) / st.w, px = ox + x * s, py = oy + y * s;
     c.drawImage(V.shadow, px - V.shPad + s * .15, py - V.shPad + s * .15);
@@ -237,10 +261,12 @@ function render() {
   }
   for (let i = 0; i < st.fuse.length; i++) if (st.fuse[i]) { const x = i % st.w, y = (i - x) / st.w; items.push({ y: y + .01, k: 5, x: ox + (x + .5) * s, py: oy + (y + .5) * s }); }
   const urg = clamp(1 - G.timeLeft / Math.min(G.time, 10), 0, 1);
-  for (let i = 0; i < st.goal.length; i++) if (st.goal[i] === 2) {
+  for (let i = 0; i < st.goal.length; i++) if (st.goal[i]) {
     const x = i % st.w, y = (i - x) / st.w;
-    if (G.mode === 'lost' && G.loseKind === 'boom') continue;
-    items.push({ y: y + .01, k: 1, x: ox + (x + .5) * s, py: oy + (y + .44) * s, v: G.mode === 'won' && G.goalHit === 'bomb' ? 1 : 0 });
+    if (st.goal[i] === 2) {
+      if (G.mode === 'lost' && G.loseKind === 'boom') continue;
+      items.push({ y: y + .01, k: 1, x: ox + (x + .5) * s, py: oy + (y + .44) * s, v: G.mode === 'won' && G.goalHit === 'bomb' ? 1 : 0 });
+    } else items.push({ y, k: 7, x: ox + x * s, py: oy + y * s, i });
   }
   st.guards.forEach((g, i) => { const p = guardDrawn(i); items.push({ y: p[1] + .01, k: 4, x: ox + (p[0] + .5) * s, py: oy + (p[1] + .43) * s, g: i }); });
   const hp = heroDrawn();
@@ -248,16 +274,32 @@ function render() {
   if (G.mode === 'intro') { const k = clamp(G.introT / .7, 0, 1); hyOff = -(1 - k * k) * 2.2; alpha = clamp(k * 3, 0, 1); h.sy = k > .92 ? .86 : 1; }
   else h.sy = lerp(h.sy, 1, .2);
   if (G.mode === 'title') alpha = 1;
-  const riding = G.mode === 'won' && G.goalHit === 'lift', atWall = hy < .5 || riding;
-  const heroIt = { y: hy + .02, k: 2, x: ox + (hx + .5) * s, py: oy + (hy + .43 + hyOff - (riding ? .62 * (G.liftIn || 0) : 0)) * s, a: alpha };
-  if (!atWall) items.push(heroIt);
+  const riding = G.mode === 'won' && G.goalHit === 'lift';
+  const heroIt = { y: hy + .02, k: 2, x: ox + (hx + .5) * s, py: oy + (hy + .43 + hyOff) * s, a: alpha };
+  if (!riding) items.push(heroIt);
   items.sort((a, b) => a.y - b.y);
+  const H = s * LIFT_H;
   for (const it of items) {
     if (it.k === 0) c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh));
-    else if (it.k === 3) c.drawImage(V.pillarS, Math.round(it.x), Math.round(it.py - hh));
+    else if (it.k === 3) c.drawImage(V.colS, Math.round(it.x), Math.round(it.py - hh));
+    else if (it.k === 6) c.drawImage(carSprite(it.h, it.col), Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 1) drawBomb(c, it.x, it.py, s, t, urg, it.v);
     else if (it.k === 5) drawFuseCoil(c, it.x, it.py, s, t);
     else if (it.k === 4) { const g = st.guards[it.g], v = G.gv[it.g]; drawGuard(c, it.x, it.py, s, { face: g.face, walk: v.walk, moving: v.moving, ko: g.alive ? 0 : Math.max(v.ko, 1), alert: v.alert, t }); }
+    else if (it.k === 7) {
+      // the lift opens when you are right in front of it, and you ride it up when you step in
+      const lx = it.i % st.w, near = Math.abs(hx - lx) + Math.abs(hy - 1);
+      let want = near < .1 ? 1 : near <= 1.05 ? .35 : 0;
+      const here = riding && Math.abs(hx - lx) < .5;
+      if (here) want = G.endT < .5 ? 1 : 0;
+      const cur = G.liftOpen[it.i] || 0;
+      const o = G.liftOpen[it.i] = cur + (want - cur) * .22;
+      const inside = here ? () => {
+        const k = G.liftIn || 0;
+        drawHero(c, it.x + s / 2, lerp(oy + (1.43) * s, it.py + s - H * .55, k), s * (1 - .2 * k), { dir: k < .95 ? 0 : 1, walk: h.walk, moving: h.moving, push: 0, sx: 1, sy: 1, lift: 0, alpha: 1 });
+      } : null;
+      drawLift(c, it.x, it.py, s, H, o, t, here && G.endT > .6, inside);
+    }
     else if (it.a > 0.01) drawHero(c, it.x, it.py, s, { dir: h.dir, walk: h.walk, moving: h.moving, push: h.push, sx: 1, sy: h.sy * (1 + Math.sin(t * 3) * .012 * (1 - h.moving)), lift: h.lift, alpha: it.a });
   }
   // laser beams at waist height
@@ -277,22 +319,6 @@ function render() {
   c.globalCompositeOperation = 'source-over';
   c.restore();
   c.drawImage(V.front, 0, 0);
-  // lifts in the back wall, with the hero in front of them or riding inside
-  const drawH = () => { if (heroIt.a > 0.01) drawHero(c, heroIt.x, heroIt.py, s * (riding ? 1 - .1 * (G.liftIn || 0) : 1), { dir: riding ? 0 : h.dir, walk: h.walk, moving: h.moving, push: h.push, sx: 1, sy: 1, lift: 0, alpha: heroIt.a }); };
-  G.liftOpen = G.liftOpen || {};
-  let drewHero = false;
-  for (let i = 0; i < st.goal.length; i++) if (st.goal[i] === 1) {
-    const x = i % st.w, y = (i - x) / st.w, near = Math.abs(hx - x) + Math.abs(hy - y);
-    let want = near <= 1.05 ? 1 : near <= 2.05 ? .3 : 0;
-    if (riding) want = G.endT < .5 ? 1 : 0;
-    const cur = G.liftOpen[i] == null ? 0 : G.liftOpen[i];
-    const o = G.liftOpen[i] = cur + (want - cur) * Math.min(1, (riding && G.endT >= .5 ? .16 : .2));
-    const b = liftBox(ox + x * s, s, oy, hh, V.ft);
-    drawLiftBack(c, b, s, o);
-    if (riding && Math.abs(hx - x) < .5) { drawH(); drewHero = true; }
-    drawLiftDoors(c, b, s, o, t, riding && G.endT > .7);
-  }
-  if (atWall && !drewHero) drawH();
 
   // light map
   const lc = V.lctx, k = V.light.width / cw, a = G.theme.amb;
@@ -309,7 +335,7 @@ function render() {
   for (const ci of seen) { const x = ci % st.w, y = (ci - x) / st.w; L(ox + (x + .5) * s, oy + (y + .5) * s, s * 1.3, '255,235,180', .5); }
   st.guards.forEach(g => { if (g.alive) L(ox + (g.x + .5) * s, oy + (g.y + .5) * s, s * 1.6, '255,235,180', .45); });
   st.lasers.forEach(l => { const cells = TowerRules.beam(st, l); cells.forEach((ci, j) => { if (j % 2) return; const x = ci % st.w, y = (ci - x) / st.w; L(ox + (x + .5) * s, oy + (y + .2) * s, s * 1.2, '255,60,60', .35); }); });
-  for (let i = 0; i < st.goal.length; i++) if (st.goal[i]) { const x = i % st.w, y = (i - x) / st.w; if (st.goal[i] === 1) { L(ox + (x + .5) * s, oy - hh, s * 2.2, '255,225,170', .6); L(ox + (x + .5) * s, oy - hh - V.ft, s * 1.4, '90,255,160', .35); } else L(ox + (x + .5) * s, oy + (y + .5) * s, s * 2.4, '255,80,50', .45 + .15 * Math.sin(t * 4)); }
+  for (let i = 0; i < st.goal.length; i++) if (st.goal[i]) { const x = i % st.w, y = (i - x) / st.w; if (st.goal[i] === 1) { L(ox + (x + .5) * s, oy + (y + 1) * s, s * 2, '255,225,170', .5 + .4 * (G.liftOpen[i] || 0)); L(ox + (x + .5) * s, oy + y * s - s * .2, s * 1.3, '90,255,160', .45); } else L(ox + (x + .5) * s, oy + (y + .5) * s, s * 2.4, '255,80,50', .45 + .15 * Math.sin(t * 4)); }
   for (let i = 0; i < st.fuse.length; i++) if (st.fuse[i]) { const x = i % st.w, y = (i - x) / st.w; L(ox + (x + .5) * s, oy + (y + .5) * s, s * 1.8, '255,190,80', .5); }
   if (G.alarm > 0) L(cw / 2, ch / 2, Math.max(cw, ch), '255,40,40', .35 * G.alarm * (.5 + .5 * Math.sin(t * 14)));
   if (G.flash > 0) L(cw / 2, ch / 2, Math.max(cw, ch), '255,220,170', G.flash);
