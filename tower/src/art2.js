@@ -86,25 +86,52 @@ function paintGlass(c, s, rnd) {
   for (let i = 0; i < 6; i++) { c.fillStyle = 'rgba(255,255,255,.9)'; const x = s * (.1 + rnd() * .8), y = s * (.1 + rnd() * .8); c.fillRect(x, y, Math.max(1, s * .02), Math.max(1, s * .02)); }
 }
 
-/* the lift: a lit pad with arrows that pulse upward */
-function drawLift(c, x, y, s, t, open) {
-  const m = s * .08, w = s - m * 2;
-  c.save(); c.translate(x, y);
-  c.fillStyle = '#20262f'; rr(c, m, m, w, w, s * .08); c.fill();
-  const gl = c.createLinearGradient(0, m, 0, s - m); gl.addColorStop(0, '#5d6878'); gl.addColorStop(1, '#2c333d');
-  c.strokeStyle = gl; c.lineWidth = s * .06; rr(c, m, m, w, w, s * .08); c.stroke();
-  for (let i = 0; i < 3; i++) {
-    const k = ((t * 1.4 + i / 3) % 1), yy = s * (.78 - k * .5), a = Math.sin(k * Math.PI);
-    c.strokeStyle = 'rgba(90,255,160,' + (.25 + .75 * a) + ')'; c.lineWidth = s * .07; c.lineCap = 'round'; c.lineJoin = 'round';
-    c.beginPath(); c.moveTo(s * .32, yy + s * .1); c.lineTo(s * .5, yy - s * .05); c.lineTo(s * .68, yy + s * .1); c.stroke();
-  }
-  if (open > 0) {
-    c.globalCompositeOperation = 'lighter';
-    const bg = c.createLinearGradient(0, s, 0, -s * 2.5);
-    bg.addColorStop(0, 'rgba(120,255,180,' + .55 * open + ')'); bg.addColorStop(1, 'rgba(120,255,180,0)');
-    c.fillStyle = bg; c.fillRect(m * 1.5, -s * 2.5, w - m, s * 3.4);
-  }
-  c.restore();
+/* the lift: a doorway in the back wall. Drawn in three parts so the player can stand in front of it or step inside. */
+function liftBox(x, s, oy, hh, ft) { // x = left edge of the lift's cell
+  const top = oy - hh - ft - s * .5;
+  return { x0: x + s * .03, w: s * .94, top, bot: oy + s * .04, ix: x + s * .15, iw: s * .7, itop: top + s * .3 };
+}
+function drawLiftSill(c, x, y, s) {
+  c.fillStyle = '#5b6370'; c.fillRect(x + s * .12, y, s * .76, s * .16);
+  c.fillStyle = 'rgba(0,0,0,.45)'; for (let i = 1; i < 6; i++) c.fillRect(x + s * .12 + i * s * .126, y + s * .02, Math.max(1, s * .015), s * .12);
+  c.fillStyle = 'rgba(255,255,255,.25)'; c.fillRect(x + s * .12, y + s * .15, s * .76, Math.max(1, s * .015));
+}
+function drawLiftBack(c, b, s, open) {
+  // steel surround
+  const g = c.createLinearGradient(b.x0, 0, b.x0 + b.w, 0);
+  g.addColorStop(0, '#6c7584'); g.addColorStop(.5, '#a9b2bf'); g.addColorStop(1, '#5d6573');
+  c.fillStyle = g; rr(c, b.x0, b.top, b.w, b.bot - b.top, s * .06); c.fill();
+  c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = Math.max(1, s * .02); c.stroke();
+  // car interior, warm light
+  const ig = c.createLinearGradient(0, b.itop, 0, b.bot);
+  ig.addColorStop(0, '#f3d9a4'); ig.addColorStop(.7, '#b98a52'); ig.addColorStop(1, '#5e4024');
+  c.fillStyle = ig; c.fillRect(b.ix, b.itop, b.iw, b.bot - b.itop);
+  c.fillStyle = 'rgba(255,255,255,.25)'; c.fillRect(b.ix + b.iw * .1, b.itop + s * .05, b.iw * .8, s * .04);
+}
+function drawLiftDoors(c, b, s, open, t, going) {
+  const half = b.iw / 2, w = half * (1 - open);
+  const panel = (x, ww) => {
+    if (ww < 1) return;
+    const g = c.createLinearGradient(x, 0, x + ww, 0);
+    g.addColorStop(0, '#9aa3b0'); g.addColorStop(.5, '#d7dde5'); g.addColorStop(1, '#8b94a1');
+    c.fillStyle = g; c.fillRect(x, b.itop, ww, b.bot - b.itop);
+    c.fillStyle = 'rgba(0,0,0,.18)'; for (let i = 1; i < 4; i++) c.fillRect(x + ww * i / 4, b.itop, 1, b.bot - b.itop);
+  };
+  panel(b.ix, w); panel(b.ix + b.iw - w, w);
+  c.fillStyle = 'rgba(0,0,0,.6)'; if (w > 1) c.fillRect(b.ix + w - 1, b.itop, 2, b.bot - b.itop);
+  // floor indicator with an up arrow
+  const ix = b.x0 + b.w / 2, iy = b.top + s * .15;
+  c.fillStyle = '#10151c'; rr(c, ix - s * .2, iy - s * .1, s * .4, s * .2, s * .04); c.fill();
+  const pulse = going ? .6 + .4 * Math.sin(t * 18) : .7 + .3 * Math.sin(t * 4);
+  c.fillStyle = 'rgba(90,255,160,' + pulse + ')';
+  c.beginPath(); c.moveTo(ix, iy - s * .07); c.lineTo(ix + s * .07, iy + s * .05); c.lineTo(ix - s * .07, iy + s * .05); c.closePath(); c.fill();
+  c.globalCompositeOperation = 'lighter';
+  const lg = c.createRadialGradient(ix, iy, 0, ix, iy, s * .3); lg.addColorStop(0, 'rgba(90,255,160,' + .45 * pulse + ')'); lg.addColorStop(1, 'rgba(90,255,160,0)');
+  c.fillStyle = lg; ell(c, ix, iy, s * .3, s * .3); c.fill();
+  c.globalCompositeOperation = 'source-over';
+  // call button beside the doors
+  c.fillStyle = '#2a3038'; rr(c, b.x0 + b.w - s * .1, b.itop + s * .25, s * .06, s * .1, s * .02); c.fill();
+  c.fillStyle = open > .05 ? '#ffd166' : '#6b7280'; ell(c, b.x0 + b.w - s * .07, b.itop + s * .3, s * .018, s * .018); c.fill();
 }
 
 /* a coiled spare fuse with a little spark */

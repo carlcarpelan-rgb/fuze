@@ -14,7 +14,7 @@ function loadLevel(idx) {
   G.gv = G.st.guards.map(() => ({ ox: 0, oy: 0, t: 1, d: MOVE_D, walk: 0, moving: 0, ko: 0, alert: 0, bx: 0, by: 0, bt: 1 }));
   G.history = []; G.particles.length = 0;
   G.shake = 0; G.flash = 0; G.alarm = 0; G.introT = 0; G.endT = 0; G.panelShown = false; G.loseKind = ''; G.fuseFlash = 0; G.refillT = 0;
-  G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null;
+  G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {};
   G.motes = [];
   const rnd = mulberry32(idx * 31 + 7);
   for (let i = 0; i < 26; i++) G.motes.push({ x: rnd() * G.st.w, y: rnd() * G.st.h, ph: rnd() * TAU, sp: .5 + rnd(), sz: .5 + rnd() });
@@ -156,7 +156,7 @@ function update(dt) {
   }
   if (G.mode === 'won') {
     G.endT += dt;
-    if (G.goalHit === 'lift') { h.lift = easeInOut(Math.min(1, G.endT / .9)) * 1.2; h.alpha = 1 - Math.min(1, Math.max(0, G.endT - .4) / .5); }
+    if (G.goalHit === 'lift') { G.liftIn = easeInOut(Math.min(1, G.endT / .45)); h.walk += dt * 4; h.moving = G.endT < .45 ? 1 : 0; }
     else h.lift = Math.abs(Math.sin(Math.min(G.endT, .9) / .9 * Math.PI * 2)) * .16;
     if (!G.panelShown && G.endT > 1.05) { G.panelShown = true; showResult(); }
   } else if (G.mode === 'lost') {
@@ -199,7 +199,7 @@ function render() {
   c.fillStyle = sg; c.fillRect(ox, oy, C * s, s * .45);
   // glass, lift pads, spare fuses
   for (let i = 0; i < st.glass.length; i++) if (st.glass[i]) { const x = i % st.w, y = (i - x) / st.w; c.drawImage(V.glassS[(x * 3 + y) % 4], ox + x * s, oy + y * s); }
-  for (let i = 0; i < st.goal.length; i++) if (st.goal[i] === 1) { const x = i % st.w, y = (i - x) / st.w; drawLift(c, ox + x * s, oy + y * s, s, t, G.mode === 'won' ? Math.min(1, G.endT * 2) : 0); }
+  for (let i = 0; i < st.goal.length; i++) if (st.goal[i] === 1) { const x = i % st.w, y = (i - x) / st.w; drawLiftSill(c, ox + x * s, oy + y * s, s); }
   // what the guards can see: lit floor, so danger reads at a glance
   const seen = new Set();
   st.guards.forEach((g, k) => {
@@ -248,7 +248,9 @@ function render() {
   if (G.mode === 'intro') { const k = clamp(G.introT / .7, 0, 1); hyOff = -(1 - k * k) * 2.2; alpha = clamp(k * 3, 0, 1); h.sy = k > .92 ? .86 : 1; }
   else h.sy = lerp(h.sy, 1, .2);
   if (G.mode === 'title') alpha = 1;
-  items.push({ y: hy + .02, k: 2, x: ox + (hx + .5) * s, py: oy + (hy + .43 + hyOff) * s, a: alpha });
+  const riding = G.mode === 'won' && G.goalHit === 'lift', atWall = hy < .5 || riding;
+  const heroIt = { y: hy + .02, k: 2, x: ox + (hx + .5) * s, py: oy + (hy + .43 + hyOff - (riding ? .62 * (G.liftIn || 0) : 0)) * s, a: alpha };
+  if (!atWall) items.push(heroIt);
   items.sort((a, b) => a.y - b.y);
   for (const it of items) {
     if (it.k === 0) c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh));
@@ -275,6 +277,22 @@ function render() {
   c.globalCompositeOperation = 'source-over';
   c.restore();
   c.drawImage(V.front, 0, 0);
+  // lifts in the back wall, with the hero in front of them or riding inside
+  const drawH = () => { if (heroIt.a > 0.01) drawHero(c, heroIt.x, heroIt.py, s * (riding ? 1 - .1 * (G.liftIn || 0) : 1), { dir: riding ? 0 : h.dir, walk: h.walk, moving: h.moving, push: h.push, sx: 1, sy: 1, lift: 0, alpha: heroIt.a }); };
+  G.liftOpen = G.liftOpen || {};
+  let drewHero = false;
+  for (let i = 0; i < st.goal.length; i++) if (st.goal[i] === 1) {
+    const x = i % st.w, y = (i - x) / st.w, near = Math.abs(hx - x) + Math.abs(hy - y);
+    let want = near <= 1.05 ? 1 : near <= 2.05 ? .3 : 0;
+    if (riding) want = G.endT < .5 ? 1 : 0;
+    const cur = G.liftOpen[i] == null ? 0 : G.liftOpen[i];
+    const o = G.liftOpen[i] = cur + (want - cur) * Math.min(1, (riding && G.endT >= .5 ? .16 : .2));
+    const b = liftBox(ox + x * s, s, oy, hh, V.ft);
+    drawLiftBack(c, b, s, o);
+    if (riding && Math.abs(hx - x) < .5) { drawH(); drewHero = true; }
+    drawLiftDoors(c, b, s, o, t, riding && G.endT > .7);
+  }
+  if (atWall && !drewHero) drawH();
 
   // light map
   const lc = V.lctx, k = V.light.width / cw, a = G.theme.amb;
@@ -291,7 +309,7 @@ function render() {
   for (const ci of seen) { const x = ci % st.w, y = (ci - x) / st.w; L(ox + (x + .5) * s, oy + (y + .5) * s, s * 1.3, '255,235,180', .5); }
   st.guards.forEach(g => { if (g.alive) L(ox + (g.x + .5) * s, oy + (g.y + .5) * s, s * 1.6, '255,235,180', .45); });
   st.lasers.forEach(l => { const cells = TowerRules.beam(st, l); cells.forEach((ci, j) => { if (j % 2) return; const x = ci % st.w, y = (ci - x) / st.w; L(ox + (x + .5) * s, oy + (y + .2) * s, s * 1.2, '255,60,60', .35); }); });
-  for (let i = 0; i < st.goal.length; i++) if (st.goal[i]) { const x = i % st.w, y = (i - x) / st.w; L(ox + (x + .5) * s, oy + (y + .5) * s, s * 2.4, st.goal[i] === 1 ? '90,255,160' : '255,80,50', .45 + .15 * Math.sin(t * 4)); }
+  for (let i = 0; i < st.goal.length; i++) if (st.goal[i]) { const x = i % st.w, y = (i - x) / st.w; if (st.goal[i] === 1) { L(ox + (x + .5) * s, oy - hh, s * 2.2, '255,225,170', .6); L(ox + (x + .5) * s, oy - hh - V.ft, s * 1.4, '90,255,160', .35); } else L(ox + (x + .5) * s, oy + (y + .5) * s, s * 2.4, '255,80,50', .45 + .15 * Math.sin(t * 4)); }
   for (let i = 0; i < st.fuse.length; i++) if (st.fuse[i]) { const x = i % st.w, y = (i - x) / st.w; L(ox + (x + .5) * s, oy + (y + .5) * s, s * 1.8, '255,190,80', .5); }
   if (G.alarm > 0) L(cw / 2, ch / 2, Math.max(cw, ch), '255,40,40', .35 * G.alarm * (.5 + .5 * Math.sin(t * 14)));
   if (G.flash > 0) L(cw / 2, ch / 2, Math.max(cw, ch), '255,220,170', G.flash);
