@@ -15,7 +15,8 @@ const strip = {
   power: lv => ({ ...lv, m: lv.m.replace(/P/g, '.') }),
   blink: lv => ({ ...lv, lasers: lv.lasers.map(l => ({ ...l, on: null })) }),
   vents: lv => ({ ...lv, vents: [] }),
-  shadow: lv => ({ ...lv, m: lv.m.replace(/s/g, '.') })
+  shadow: lv => ({ ...lv, m: lv.m.replace(/s/g, '.') }),
+  plate: lv => ({ ...lv, m: lv.m.replace(/o/g, '.') })
 };
 const sols = [];
 let bad = 0;

@@ -19,6 +19,8 @@
 //   'L' light switch: on a dark floor (dark: 1) stepping onto it puts the lights on. Darkness only changes what you see.
 //   's' shadow: a guard does not see you while you stand in it.
 //   'V' vent, paired by vents [[x1,y1,x2,y2]]: step in and you come out of the other end.
+//   'o' pressure plate, 'D' door: every door stands open while something weighs down a plate (you, a crate, a car,
+//       a guard, even a knocked-out one). Step off and it shuts, unless something is standing in the doorway.
 //   Glass is loud: step on it and every guard standing still within three squares turns to face the noise.
 (function (root) {
   'use strict';
@@ -37,6 +39,8 @@
       else if (c === 'P') L.power.push({ x, y });
       else if (c === 'L') L.lamps.push({ x, y });
       else if (c === 's') L.shadow.push({ x, y });
+      else if (c === 'o') (L.plates || (L.plates = [])).push({ x, y });
+      else if (c === 'D') (L.doors || (L.doors = [])).push({ x, y });
       else if (c === 'X') L.walls.push({ x, y });
       else if (c === 'g') L.glass.push({ x, y });
       else if (c === 'F') L.fuses.push({ x, y });
@@ -58,7 +62,8 @@
       blockAt: new Int16Array(N), carAt: new Int16Array(N), wall: new Uint8Array(N), glass: new Uint8Array(N), fuse: new Uint8Array(N), goal: new Uint8Array(N),
       blocks: L.blocks.map(b => ({ x: b.x, y: b.y, m: b.m })),
       cars: L.cars.map(c => ({ x: c.x, y: c.y, h: c.h })),
-      recv: new Uint8Array(N), sw: new Uint8Array(N), shadow: new Uint8Array(N), vent: new Int16Array(N).fill(-1),
+      recv: new Uint8Array(N), sw: new Uint8Array(N), shadow: new Uint8Array(N), vent: new Int16Array(N).fill(-1), door: new Uint8Array(N),
+      plates: (L.plates || []).map(o => o.y * L.w + o.x),
       n: 0, power: 1, lit: L.dark ? 0 : 1, hasPower: L.power.length > 0, hasRecv: L.recv.length > 0, dark: L.dark,
       guards: L.guards.map(g => {
         const p0 = g.path[0], p1 = g.path[1];
@@ -79,14 +84,30 @@
     L.power.forEach(o => { st.sw[o.y * st.w + o.x] = 1; });
     L.lamps.forEach(o => { st.sw[o.y * st.w + o.x] = 2; });
     L.shadow.forEach(o => { st.shadow[o.y * st.w + o.x] = 1; });
+    (L.doors || []).forEach(o => { st.door[o.y * st.w + o.x] = 1; });
     L.ventPairs.forEach(v => { const a = v[1] * st.w + v[0], b = v[3] * st.w + v[2]; st.vent[a] = b; st.vent[b] = a; });
     return st;
   }
   function dirOf(dx, dy) { return dy < 0 ? 0 : dy > 0 ? 1 : dx < 0 ? 2 : 3; }
   const inB = (st, x, y) => x >= 0 && y >= 0 && x < st.w && y < st.h;
   function guardAt(st, x, y) { for (let i = 0; i < st.guards.length; i++) { const g = st.guards[i]; if (g.alive && g.x === x && g.y === y) return i; } return -1; }
+  // is anything weighing down a pressure plate?
+  function pressed(st) {
+    for (const i of st.plates) {
+      if (i === st.py * st.w + st.px || st.blockAt[i] || st.carAt[i]) return true;
+      for (const g of st.guards) if (g.y * st.w + g.x === i) return true;
+    }
+    return false;
+  }
+  // a door that is shut right now (it cannot shut on something standing in it)
+  function shut(st, i) {
+    if (!st.door[i] || pressed(st)) return false;
+    if (i === st.py * st.w + st.px || st.blockAt[i] || st.carAt[i]) return false;
+    for (const g of st.guards) if (g.y * st.w + g.x === i) return false;
+    return true;
+  }
   // things you cannot see through
-  const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.recv[i];
+  const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.recv[i] || (st.door[i] && shut(st, i));
 
   // A guard's view, as [cell, k] pairs (k = 1 ahead, 0 beside him): the square in front and the squares on either side.
   //     c
@@ -119,7 +140,7 @@
       if (st.recv[i]) { out.hit = i; break; }
       const b = st.blockAt[i];
       if (b && st.blocks[b - 1].m) { out.push(i); const nd = REFL[st.blocks[b - 1].m - 1][d]; out.turns.push(i, d, nd); d = nd; continue; }
-      if (st.wall[i] || b || st.carAt[i] || st.goal[i]) break;
+      if (st.wall[i] || b || st.carAt[i] || st.goal[i] || (st.door[i] && shut(st, i))) break;
       out.push(i);
     }
     return out;
@@ -148,7 +169,7 @@
       let ni = g.i + g.dir;
       if (ni < 0 || ni >= g.path.length) { g.dir = -g.dir; ni = g.i + g.dir; const p = g.path[ni]; g.face = dirOf(p.x - g.x, p.y - g.y); ev.push({ g: k, turn: true }); continue; }
       const p = g.path[ni], c = p.y * st.w + p.x;
-      if (st.blockAt[c] || st.carAt[c] || st.wall[c] || guardAt(st, p.x, p.y) >= 0) { g.dir = -g.dir; g.face = dirOf(-(p.x - g.x), -(p.y - g.y)); ev.push({ g: k, turn: true }); continue; }
+      if (st.blockAt[c] || st.carAt[c] || st.wall[c] || (st.door[c] && shut(st, c)) || guardAt(st, p.x, p.y) >= 0) { g.dir = -g.dir; g.face = dirOf(-(p.x - g.x), -(p.y - g.y)); ev.push({ g: k, turn: true }); continue; }
       const fx = g.x, fy = g.y;
       g.face = dirOf(p.x - g.x, p.y - g.y); g.x = p.x; g.y = p.y; g.i = ni;
       ev.push({ g: k, from: [fx, fy] });
@@ -161,7 +182,7 @@
   function freeFor(st, x, y) {
     if (!inB(st, x, y)) return false;
     const i = y * st.w + x;
-    return !(st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.fuse[i] || st.recv[i] || st.sw[i] || st.vent[i] >= 0 || guardAt(st, x, y) >= 0);
+    return !(st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.fuse[i] || st.recv[i] || st.sw[i] || st.vent[i] >= 0 || (st.door[i] && shut(st, i)) || guardAt(st, x, y) >= 0);
   }
 
   // One player step. Returns what happened, for the game's animation and the solver.
@@ -170,6 +191,7 @@
     if (!inB(st, tx, ty)) return { t: 'blocked' };
     const ti = ty * st.w + tx;
     if (st.wall[ti] || st.recv[ti]) return { t: 'blocked', wall: true };
+    if (st.door[ti] && shut(st, ti)) return { t: 'blocked', door: true };
     if (st.goal[ti] === 1 && d !== 0) return { t: 'blocked', lift: true }; // lift doors face the room
     if (st.goal[ti] === 1 && !liftWorks(st)) return { t: 'blocked', lift: true, locked: true };
     const res = { t: 'move', d, ev: [], cost: 0 };
@@ -232,7 +254,7 @@
       cars: st.cars.map(c => ({ x: c.x, y: c.y, h: c.h })),
       guards: st.guards.map(g => ({ path: g.path, look: g.look, li: g.li, i: g.i, dir: g.dir, x: g.x, y: g.y, face: g.face, alive: g.alive })),
       lasers: st.lasers,
-      recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent,
+      recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent, door: st.door, plates: st.plates,
       n: st.n, power: st.power, lit: st.lit, hasPower: st.hasPower, hasRecv: st.hasRecv, dark: st.dark
     };
   }
@@ -254,7 +276,7 @@
   function lcm(a, b) { const g = (x, y) => y ? g(y, x % y) : x; return a / g(a, b) * b;
   }
 
-  const api = { parseLevel, makeState, step, sight, sees, beam, laserOn, liftWorks, spotted, clone, key, DX, DY, GLASS_COST, dirOf, opaque };
+  const api = { parseLevel, makeState, step, sight, sees, beam, laserOn, liftWorks, spotted, clone, key, pressed, shut, DX, DY, GLASS_COST, dirOf, opaque };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TowerRules = api;
 })(typeof window !== 'undefined' ? window : globalThis);

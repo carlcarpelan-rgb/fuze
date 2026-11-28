@@ -309,6 +309,8 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
 //   'L' light switch: on a dark floor (dark: 1) stepping onto it puts the lights on. Darkness only changes what you see.
 //   's' shadow: a guard does not see you while you stand in it.
 //   'V' vent, paired by vents [[x1,y1,x2,y2]]: step in and you come out of the other end.
+//   'o' pressure plate, 'D' door: every door stands open while something weighs down a plate (you, a crate, a car,
+//       a guard, even a knocked-out one). Step off and it shuts, unless something is standing in the doorway.
 //   Glass is loud: step on it and every guard standing still within three squares turns to face the noise.
 (function (root) {
   'use strict';
@@ -327,6 +329,8 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
       else if (c === 'P') L.power.push({ x, y });
       else if (c === 'L') L.lamps.push({ x, y });
       else if (c === 's') L.shadow.push({ x, y });
+      else if (c === 'o') (L.plates || (L.plates = [])).push({ x, y });
+      else if (c === 'D') (L.doors || (L.doors = [])).push({ x, y });
       else if (c === 'X') L.walls.push({ x, y });
       else if (c === 'g') L.glass.push({ x, y });
       else if (c === 'F') L.fuses.push({ x, y });
@@ -348,7 +352,8 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
       blockAt: new Int16Array(N), carAt: new Int16Array(N), wall: new Uint8Array(N), glass: new Uint8Array(N), fuse: new Uint8Array(N), goal: new Uint8Array(N),
       blocks: L.blocks.map(b => ({ x: b.x, y: b.y, m: b.m })),
       cars: L.cars.map(c => ({ x: c.x, y: c.y, h: c.h })),
-      recv: new Uint8Array(N), sw: new Uint8Array(N), shadow: new Uint8Array(N), vent: new Int16Array(N).fill(-1),
+      recv: new Uint8Array(N), sw: new Uint8Array(N), shadow: new Uint8Array(N), vent: new Int16Array(N).fill(-1), door: new Uint8Array(N),
+      plates: (L.plates || []).map(o => o.y * L.w + o.x),
       n: 0, power: 1, lit: L.dark ? 0 : 1, hasPower: L.power.length > 0, hasRecv: L.recv.length > 0, dark: L.dark,
       guards: L.guards.map(g => {
         const p0 = g.path[0], p1 = g.path[1];
@@ -369,14 +374,30 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
     L.power.forEach(o => { st.sw[o.y * st.w + o.x] = 1; });
     L.lamps.forEach(o => { st.sw[o.y * st.w + o.x] = 2; });
     L.shadow.forEach(o => { st.shadow[o.y * st.w + o.x] = 1; });
+    (L.doors || []).forEach(o => { st.door[o.y * st.w + o.x] = 1; });
     L.ventPairs.forEach(v => { const a = v[1] * st.w + v[0], b = v[3] * st.w + v[2]; st.vent[a] = b; st.vent[b] = a; });
     return st;
   }
   function dirOf(dx, dy) { return dy < 0 ? 0 : dy > 0 ? 1 : dx < 0 ? 2 : 3; }
   const inB = (st, x, y) => x >= 0 && y >= 0 && x < st.w && y < st.h;
   function guardAt(st, x, y) { for (let i = 0; i < st.guards.length; i++) { const g = st.guards[i]; if (g.alive && g.x === x && g.y === y) return i; } return -1; }
+  // is anything weighing down a pressure plate?
+  function pressed(st) {
+    for (const i of st.plates) {
+      if (i === st.py * st.w + st.px || st.blockAt[i] || st.carAt[i]) return true;
+      for (const g of st.guards) if (g.y * st.w + g.x === i) return true;
+    }
+    return false;
+  }
+  // a door that is shut right now (it cannot shut on something standing in it)
+  function shut(st, i) {
+    if (!st.door[i] || pressed(st)) return false;
+    if (i === st.py * st.w + st.px || st.blockAt[i] || st.carAt[i]) return false;
+    for (const g of st.guards) if (g.y * st.w + g.x === i) return false;
+    return true;
+  }
   // things you cannot see through
-  const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.recv[i];
+  const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.recv[i] || (st.door[i] && shut(st, i));
 
   // A guard's view, as [cell, k] pairs (k = 1 ahead, 0 beside him): the square in front and the squares on either side.
   //     c
@@ -409,7 +430,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
       if (st.recv[i]) { out.hit = i; break; }
       const b = st.blockAt[i];
       if (b && st.blocks[b - 1].m) { out.push(i); const nd = REFL[st.blocks[b - 1].m - 1][d]; out.turns.push(i, d, nd); d = nd; continue; }
-      if (st.wall[i] || b || st.carAt[i] || st.goal[i]) break;
+      if (st.wall[i] || b || st.carAt[i] || st.goal[i] || (st.door[i] && shut(st, i))) break;
       out.push(i);
     }
     return out;
@@ -438,7 +459,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
       let ni = g.i + g.dir;
       if (ni < 0 || ni >= g.path.length) { g.dir = -g.dir; ni = g.i + g.dir; const p = g.path[ni]; g.face = dirOf(p.x - g.x, p.y - g.y); ev.push({ g: k, turn: true }); continue; }
       const p = g.path[ni], c = p.y * st.w + p.x;
-      if (st.blockAt[c] || st.carAt[c] || st.wall[c] || guardAt(st, p.x, p.y) >= 0) { g.dir = -g.dir; g.face = dirOf(-(p.x - g.x), -(p.y - g.y)); ev.push({ g: k, turn: true }); continue; }
+      if (st.blockAt[c] || st.carAt[c] || st.wall[c] || (st.door[c] && shut(st, c)) || guardAt(st, p.x, p.y) >= 0) { g.dir = -g.dir; g.face = dirOf(-(p.x - g.x), -(p.y - g.y)); ev.push({ g: k, turn: true }); continue; }
       const fx = g.x, fy = g.y;
       g.face = dirOf(p.x - g.x, p.y - g.y); g.x = p.x; g.y = p.y; g.i = ni;
       ev.push({ g: k, from: [fx, fy] });
@@ -451,7 +472,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
   function freeFor(st, x, y) {
     if (!inB(st, x, y)) return false;
     const i = y * st.w + x;
-    return !(st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.fuse[i] || st.recv[i] || st.sw[i] || st.vent[i] >= 0 || guardAt(st, x, y) >= 0);
+    return !(st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.fuse[i] || st.recv[i] || st.sw[i] || st.vent[i] >= 0 || (st.door[i] && shut(st, i)) || guardAt(st, x, y) >= 0);
   }
 
   // One player step. Returns what happened, for the game's animation and the solver.
@@ -460,6 +481,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
     if (!inB(st, tx, ty)) return { t: 'blocked' };
     const ti = ty * st.w + tx;
     if (st.wall[ti] || st.recv[ti]) return { t: 'blocked', wall: true };
+    if (st.door[ti] && shut(st, ti)) return { t: 'blocked', door: true };
     if (st.goal[ti] === 1 && d !== 0) return { t: 'blocked', lift: true }; // lift doors face the room
     if (st.goal[ti] === 1 && !liftWorks(st)) return { t: 'blocked', lift: true, locked: true };
     const res = { t: 'move', d, ev: [], cost: 0 };
@@ -522,7 +544,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
       cars: st.cars.map(c => ({ x: c.x, y: c.y, h: c.h })),
       guards: st.guards.map(g => ({ path: g.path, look: g.look, li: g.li, i: g.i, dir: g.dir, x: g.x, y: g.y, face: g.face, alive: g.alive })),
       lasers: st.lasers,
-      recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent,
+      recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent, door: st.door, plates: st.plates,
       n: st.n, power: st.power, lit: st.lit, hasPower: st.hasPower, hasRecv: st.hasRecv, dark: st.dark
     };
   }
@@ -544,7 +566,7 @@ kbd { font: inherit; font-size: .8em; padding: 1px 7px; border-radius: 6px; back
   function lcm(a, b) { const g = (x, y) => y ? g(y, x % y) : x; return a / g(a, b) * b;
   }
 
-  const api = { parseLevel, makeState, step, sight, sees, beam, laserOn, liftWorks, spotted, clone, key, DX, DY, GLASS_COST, dirOf, opaque };
+  const api = { parseLevel, makeState, step, sight, sees, beam, laserOn, liftWorks, spotted, clone, key, pressed, shut, DX, DY, GLASS_COST, dirOf, opaque };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TowerRules = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1442,7 +1464,7 @@ function drawReceiver(c, px, py, s, hh, on, t) {
   fg.addColorStop(0, '#5c6672'); fg.addColorStop(1, '#2b3139');
   c.fillStyle = fg; rr(c, px + p, top, w, s + hh * 1.6 - p, s * .1); c.fill();
   c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = Math.max(1, s * .02); c.stroke();
-  const cx = px + s / 2, cy = top + s * .45, r = s * .22;
+  const cx = px + s / 2, cy = py + s * .5 - hh * .55, r = s * .22; // the lens sits at beam height, so beams meet it square on
   c.fillStyle = '#10151a'; ell(c, cx, cy, r * 1.25, r * 1.25); c.fill();
   const g = c.createRadialGradient(cx - r * .3, cy - r * .3, 0, cx, cy, r);
   if (on) { g.addColorStop(0, '#eafff2'); g.addColorStop(.5, '#3dff8a'); g.addColorStop(1, '#0d7a3a'); }
@@ -1483,6 +1505,33 @@ function drawShadowPatch(c, x, y, s) {
   const g = c.createRadialGradient(x + s / 2, y + s / 2, s * .1, x + s / 2, y + s / 2, s * .62);
   g.addColorStop(0, 'rgba(0,0,0,.78)'); g.addColorStop(.7, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   c.fillStyle = g; c.fillRect(x - s * .1, y - s * .1, s * 1.2, s * 1.2);
+}
+
+/* a pressure plate: on while something weighs it down */
+function drawPlate(c, x, y, s, on, t) {
+  const p = s * .16, w = s - p * 2;
+  c.fillStyle = 'rgba(0,0,0,.45)'; rr(c, x + p - s * .02, y + p - s * .02, w + s * .04, w + s * .04, s * .1); c.fill();
+  const g = c.createLinearGradient(x, y + p, x, y + s - p);
+  if (on) { g.addColorStop(0, '#6f7a3a'); g.addColorStop(1, '#4a5226'); } else { g.addColorStop(0, '#c9ced6'); g.addColorStop(1, '#8b929c'); }
+  c.fillStyle = g; rr(c, x + p, y + p + (on ? s * .03 : 0), w, w - (on ? s * .03 : s * .05), s * .08); c.fill();
+  c.strokeStyle = on ? 'rgba(200,255,90,.9)' : 'rgba(255,214,90,.75)'; c.lineWidth = Math.max(1.5, s * .035); c.stroke();
+  if (on) { c.save(); c.globalCompositeOperation = 'lighter'; const h = c.createRadialGradient(x + s / 2, y + s / 2, 0, x + s / 2, y + s / 2, s * .5); h.addColorStop(0, 'rgba(190,255,80,.35)'); h.addColorStop(1, 'rgba(190,255,80,0)'); c.fillStyle = h; ell(c, x + s / 2, y + s / 2, s * .5, s * .5); c.fill(); c.restore(); }
+}
+/* a door in a wall: a striped steel shutter when shut, open rails when open */
+function drawDoorOpen(c, x, y, s) {
+  c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x, y + s * .02, s * .1, s * .96); c.fillRect(x + s * .9, y + s * .02, s * .1, s * .96);
+  c.fillStyle = '#7b828c'; c.fillRect(x + s * .02, y, s * .05, s); c.fillRect(x + s * .93, y, s * .05, s);
+}
+function drawDoorShut(c, x, py, s, hh, t) {
+  const top = py - hh, H = s + hh;
+  c.save(); rr(c, x + s * .03, top, s * .94, H, s * .06); c.clip();
+  c.fillStyle = '#e9c93a'; c.fillRect(x, top, s, H);
+  c.fillStyle = '#23252a';
+  for (let k = -H; k < s + H; k += s * .28) { c.beginPath(); c.moveTo(x + k, top + H); c.lineTo(x + k + s * .14, top + H); c.lineTo(x + k + s * .14 + H, top); c.lineTo(x + k + H, top); c.fill(); }
+  const g = c.createLinearGradient(0, top, 0, top + H); g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(.75, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)');
+  c.fillStyle = g; c.fillRect(x, top, s, H);
+  c.restore();
+  c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineWidth = Math.max(1, s * .025); rr(c, x + s * .03, top, s * .94, H, s * .06); c.stroke();
 }
 
 /* ===== Game state, simulation and rendering ===== */
@@ -1820,7 +1869,7 @@ function update(dt) {
         // a held key keeps walking over open floor, but never pushes, never walks into a guard
         d = Input.held[Input.held.length - 1];
         const tx = st.px + TowerRules.DX[d], ty = st.py + TowerRules.DY[d], ti = ty * st.w + tx;
-        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
+        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || (st.door[ti] && TowerRules.shut(st, ti)) || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
       }
       if (d >= 0) doMove(d);
     }
@@ -1882,6 +1931,9 @@ function render() {
   for (let i = 0; i < st.glass.length; i++) if (st.glass[i]) { const x = i % st.w, y = (i - x) / st.w; c.drawImage(V.glassS[(x * 3 + y) % 4], ox + x * s, oy + y * s); }
   for (let i = 0; i < st.shadow.length; i++) if (st.shadow[i]) { const x = i % st.w, y = (i - x) / st.w; drawShadowPatch(c, ox + x * s, oy + y * s, s); }
   for (let i = 0; i < st.sw.length; i++) if (st.sw[i]) { const x = i % st.w, y = (i - x) / st.w; drawSwitch(c, ox + x * s, oy + y * s, s, st.sw[i], st.sw[i] === 1 ? st.power : st.lit, t); }
+  const prs = TowerRules.pressed(st);
+  for (const i of st.plates) { const x = i % st.w, y = (i - x) / st.w; drawPlate(c, ox + x * s, oy + y * s, s, prs, t); }
+  for (let i = 0; i < st.door.length; i++) if (st.door[i] && !TowerRules.shut(st, i)) { const x = i % st.w, y = (i - x) / st.w; drawDoorOpen(c, ox + x * s, oy + y * s, s); }
   G.L.ventPairs.forEach((v, k) => { drawVent(c, ox + v[0] * s, oy + v[1] * s, s, k); drawVent(c, ox + v[2] * s, oy + v[3] * s, s, k); });
   // what the guards can see: lit floor, brightest close to him, so danger reads at a glance
   const seen = new Set(), caughtNow = G.mode === 'lost' && G.loseKind === 'caught';
@@ -1918,6 +1970,7 @@ function render() {
     c.drawImage(V.shadow, px - V.shPad + s * .13, py - V.shPad + s * .13);
     items.push({ y: p[1], k: 0, x: px, py, v: v.v, m: b.m });
   });
+  for (let i = 0; i < st.door.length; i++) if (st.door[i] && TowerRules.shut(st, i)) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 9, x: ox + x * s, py: oy + y * s }); }
   for (let i = 0; i < st.recv.length; i++) if (st.recv[i]) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 8, x: ox + x * s, py: oy + y * s, i }); }
   st.cars.forEach((cr, i) => {
     const p = carDrawn(i), v = G.cv[i];
@@ -1956,6 +2009,7 @@ function render() {
   for (const it of items) {
     if (it.k === 0) { c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh)); if (it.m) drawMirror(c, it.x, it.py, s, hh, it.m); }
     else if (it.k === 8) drawReceiver(c, it.x, it.py, s, hh, recvLit.has(it.i), t);
+    else if (it.k === 9) drawDoorShut(c, it.x, it.py, s, hh, t);
     else if (it.k === 3) c.drawImage(V.colS, Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 6) c.drawImage(carSprite(it.h, it.col), Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 1) drawBomb(c, it.x, it.py, s, t, urg, it.v);
@@ -2013,7 +2067,7 @@ function render() {
     let ex, ey;
     if (b.length) { const ci = b[b.length - 1], x = ci % st.w, y = (ci - x) / st.w; ex = ox + (x + .5 + TowerRules.DX[d] * .5) * s; ey = oy + (y + .5 + TowerRules.DY[d] * .5) * s - lift; }
     else { ex = x0; ey = y0; }
-    if (b.hit >= 0) { const x = b.hit % st.w, y = (b.hit - x) / st.w; ex = ox + (x + .5) * s; ey = oy + y * s - hh * 1.6 + s * .45; }
+    if (b.hit >= 0) { const x = b.hit % st.w, y = (b.hit - x) / st.w; ex = ox + (x + .5) * s; ey = oy + (y + .5) * s - lift; } // straight into the lens
     pts.push([ex, ey]);
     const fl = .75 + .25 * Math.sin(t * 40 + l.x);
     const line = (w, a) => { c.strokeStyle = 'rgba(' + (green ? '60,255,140,' : '255,40,50,') + a * fl + ')'; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); pts.forEach((p, j) => j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke(); };
@@ -2420,7 +2474,7 @@ function showSelect() {
   const nx = nextIdx();
   // one section per part of the tower, eight floors each
   let html = '';
-  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows' };
+  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows', plate: 'Pressure plates' };
   const groups = [];
   for (let i = 0; i < LEVELS.length; ) {
     let j = i + 1;

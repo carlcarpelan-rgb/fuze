@@ -287,7 +287,7 @@ function drawReceiver(c, px, py, s, hh, on, t) {
   fg.addColorStop(0, '#5c6672'); fg.addColorStop(1, '#2b3139');
   c.fillStyle = fg; rr(c, px + p, top, w, s + hh * 1.6 - p, s * .1); c.fill();
   c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = Math.max(1, s * .02); c.stroke();
-  const cx = px + s / 2, cy = top + s * .45, r = s * .22;
+  const cx = px + s / 2, cy = py + s * .5 - hh * .55, r = s * .22; // the lens sits at beam height, so beams meet it square on
   c.fillStyle = '#10151a'; ell(c, cx, cy, r * 1.25, r * 1.25); c.fill();
   const g = c.createRadialGradient(cx - r * .3, cy - r * .3, 0, cx, cy, r);
   if (on) { g.addColorStop(0, '#eafff2'); g.addColorStop(.5, '#3dff8a'); g.addColorStop(1, '#0d7a3a'); }
@@ -328,4 +328,31 @@ function drawShadowPatch(c, x, y, s) {
   const g = c.createRadialGradient(x + s / 2, y + s / 2, s * .1, x + s / 2, y + s / 2, s * .62);
   g.addColorStop(0, 'rgba(0,0,0,.78)'); g.addColorStop(.7, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   c.fillStyle = g; c.fillRect(x - s * .1, y - s * .1, s * 1.2, s * 1.2);
+}
+
+/* a pressure plate: on while something weighs it down */
+function drawPlate(c, x, y, s, on, t) {
+  const p = s * .16, w = s - p * 2;
+  c.fillStyle = 'rgba(0,0,0,.45)'; rr(c, x + p - s * .02, y + p - s * .02, w + s * .04, w + s * .04, s * .1); c.fill();
+  const g = c.createLinearGradient(x, y + p, x, y + s - p);
+  if (on) { g.addColorStop(0, '#6f7a3a'); g.addColorStop(1, '#4a5226'); } else { g.addColorStop(0, '#c9ced6'); g.addColorStop(1, '#8b929c'); }
+  c.fillStyle = g; rr(c, x + p, y + p + (on ? s * .03 : 0), w, w - (on ? s * .03 : s * .05), s * .08); c.fill();
+  c.strokeStyle = on ? 'rgba(200,255,90,.9)' : 'rgba(255,214,90,.75)'; c.lineWidth = Math.max(1.5, s * .035); c.stroke();
+  if (on) { c.save(); c.globalCompositeOperation = 'lighter'; const h = c.createRadialGradient(x + s / 2, y + s / 2, 0, x + s / 2, y + s / 2, s * .5); h.addColorStop(0, 'rgba(190,255,80,.35)'); h.addColorStop(1, 'rgba(190,255,80,0)'); c.fillStyle = h; ell(c, x + s / 2, y + s / 2, s * .5, s * .5); c.fill(); c.restore(); }
+}
+/* a door in a wall: a striped steel shutter when shut, open rails when open */
+function drawDoorOpen(c, x, y, s) {
+  c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x, y + s * .02, s * .1, s * .96); c.fillRect(x + s * .9, y + s * .02, s * .1, s * .96);
+  c.fillStyle = '#7b828c'; c.fillRect(x + s * .02, y, s * .05, s); c.fillRect(x + s * .93, y, s * .05, s);
+}
+function drawDoorShut(c, x, py, s, hh, t) {
+  const top = py - hh, H = s + hh;
+  c.save(); rr(c, x + s * .03, top, s * .94, H, s * .06); c.clip();
+  c.fillStyle = '#e9c93a'; c.fillRect(x, top, s, H);
+  c.fillStyle = '#23252a';
+  for (let k = -H; k < s + H; k += s * .28) { c.beginPath(); c.moveTo(x + k, top + H); c.lineTo(x + k + s * .14, top + H); c.lineTo(x + k + s * .14 + H, top); c.lineTo(x + k + H, top); c.fill(); }
+  const g = c.createLinearGradient(0, top, 0, top + H); g.addColorStop(0, 'rgba(255,255,255,.18)'); g.addColorStop(.75, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)');
+  c.fillStyle = g; c.fillRect(x, top, s, H);
+  c.restore();
+  c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineWidth = Math.max(1, s * .025); rr(c, x + s * .03, top, s * .94, H, s * .06); c.stroke();
 }

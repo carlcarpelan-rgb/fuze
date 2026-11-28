@@ -58,7 +58,7 @@ function showSelect() {
   const nx = nextIdx();
   // one section per part of the tower, eight floors each
   let html = '';
-  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows' };
+  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows', plate: 'Pressure plates' };
   const groups = [];
   for (let i = 0; i < LEVELS.length; ) {
     let j = i + 1;

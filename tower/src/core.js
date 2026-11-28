@@ -169,7 +169,7 @@ function update(dt) {
         // a held key keeps walking over open floor, but never pushes, never walks into a guard
         d = Input.held[Input.held.length - 1];
         const tx = st.px + TowerRules.DX[d], ty = st.py + TowerRules.DY[d], ti = ty * st.w + tx;
-        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
+        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || (st.door[ti] && TowerRules.shut(st, ti)) || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
       }
       if (d >= 0) doMove(d);
     }
@@ -231,6 +231,9 @@ function render() {
   for (let i = 0; i < st.glass.length; i++) if (st.glass[i]) { const x = i % st.w, y = (i - x) / st.w; c.drawImage(V.glassS[(x * 3 + y) % 4], ox + x * s, oy + y * s); }
   for (let i = 0; i < st.shadow.length; i++) if (st.shadow[i]) { const x = i % st.w, y = (i - x) / st.w; drawShadowPatch(c, ox + x * s, oy + y * s, s); }
   for (let i = 0; i < st.sw.length; i++) if (st.sw[i]) { const x = i % st.w, y = (i - x) / st.w; drawSwitch(c, ox + x * s, oy + y * s, s, st.sw[i], st.sw[i] === 1 ? st.power : st.lit, t); }
+  const prs = TowerRules.pressed(st);
+  for (const i of st.plates) { const x = i % st.w, y = (i - x) / st.w; drawPlate(c, ox + x * s, oy + y * s, s, prs, t); }
+  for (let i = 0; i < st.door.length; i++) if (st.door[i] && !TowerRules.shut(st, i)) { const x = i % st.w, y = (i - x) / st.w; drawDoorOpen(c, ox + x * s, oy + y * s, s); }
   G.L.ventPairs.forEach((v, k) => { drawVent(c, ox + v[0] * s, oy + v[1] * s, s, k); drawVent(c, ox + v[2] * s, oy + v[3] * s, s, k); });
   // what the guards can see: lit floor, brightest close to him, so danger reads at a glance
   const seen = new Set(), caughtNow = G.mode === 'lost' && G.loseKind === 'caught';
@@ -267,6 +270,7 @@ function render() {
     c.drawImage(V.shadow, px - V.shPad + s * .13, py - V.shPad + s * .13);
     items.push({ y: p[1], k: 0, x: px, py, v: v.v, m: b.m });
   });
+  for (let i = 0; i < st.door.length; i++) if (st.door[i] && TowerRules.shut(st, i)) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 9, x: ox + x * s, py: oy + y * s }); }
   for (let i = 0; i < st.recv.length; i++) if (st.recv[i]) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 8, x: ox + x * s, py: oy + y * s, i }); }
   st.cars.forEach((cr, i) => {
     const p = carDrawn(i), v = G.cv[i];
@@ -305,6 +309,7 @@ function render() {
   for (const it of items) {
     if (it.k === 0) { c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh)); if (it.m) drawMirror(c, it.x, it.py, s, hh, it.m); }
     else if (it.k === 8) drawReceiver(c, it.x, it.py, s, hh, recvLit.has(it.i), t);
+    else if (it.k === 9) drawDoorShut(c, it.x, it.py, s, hh, t);
     else if (it.k === 3) c.drawImage(V.colS, Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 6) c.drawImage(carSprite(it.h, it.col), Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 1) drawBomb(c, it.x, it.py, s, t, urg, it.v);
@@ -362,7 +367,7 @@ function render() {
     let ex, ey;
     if (b.length) { const ci = b[b.length - 1], x = ci % st.w, y = (ci - x) / st.w; ex = ox + (x + .5 + TowerRules.DX[d] * .5) * s; ey = oy + (y + .5 + TowerRules.DY[d] * .5) * s - lift; }
     else { ex = x0; ey = y0; }
-    if (b.hit >= 0) { const x = b.hit % st.w, y = (b.hit - x) / st.w; ex = ox + (x + .5) * s; ey = oy + y * s - hh * 1.6 + s * .45; }
+    if (b.hit >= 0) { const x = b.hit % st.w, y = (b.hit - x) / st.w; ex = ox + (x + .5) * s; ey = oy + (y + .5) * s - lift; } // straight into the lens
     pts.push([ex, ey]);
     const fl = .75 + .25 * Math.sin(t * 40 + l.x);
     const line = (w, a) => { c.strokeStyle = 'rgba(' + (green ? '60,255,140,' : '255,40,50,') + a * fl + ')'; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); pts.forEach((p, j) => j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke(); };
