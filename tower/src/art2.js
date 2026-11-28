@@ -110,7 +110,7 @@ function paintCar(c, s, hh, h, col, rnd) {
 
 /* the lift: a steel cabin standing on one cell of the back row. Doors on the front, a green arrow on the roof.
    y is the top edge of its cell; H the height of its front. open 0..1 */
-function drawLift(c, x, y, s, H, open, t, going, inside) {
+function drawLift(c, x, y, s, H, open, t, going, inside, locked) {
   const p = s * .04, w = s - p * 2, fy = y + s - H, top = fy - s * .55, r = s * .07;
   // roof (seen from above, foreshortened)
   const rg = c.createLinearGradient(0, top, 0, fy);
@@ -120,8 +120,13 @@ function drawLift(c, x, y, s, H, open, t, going, inside) {
   // arrow lamp on the roof
   const ax = x + s / 2, ay = top + (fy - top) * .5, pulse = going ? .6 + .4 * Math.sin(t * 18) : .75 + .25 * Math.sin(t * 3);
   c.fillStyle = '#10151c'; rr(c, ax - s * .17, ay - s * .12, s * .34, s * .22, s * .05); c.fill();
-  c.fillStyle = 'rgba(90,255,160,' + pulse + ')';
-  c.beginPath(); c.moveTo(ax, ay - s * .09); c.lineTo(ax + s * .09, ay + s * .06); c.lineTo(ax - s * .09, ay + s * .06); c.closePath(); c.fill();
+  if (locked) { // no power or no green signal: a red cross and the doors stay shut
+    c.strokeStyle = 'rgba(255,70,60,' + (.7 + .3 * Math.sin(t * 4)) + ')'; c.lineWidth = Math.max(1.5, s * .035); c.lineCap = 'round';
+    c.beginPath(); c.moveTo(ax - s * .06, ay - s * .07); c.lineTo(ax + s * .06, ay + s * .05); c.moveTo(ax + s * .06, ay - s * .07); c.lineTo(ax - s * .06, ay + s * .05); c.stroke();
+  } else {
+    c.fillStyle = 'rgba(90,255,160,' + pulse + ')';
+    c.beginPath(); c.moveTo(ax, ay - s * .09); c.lineTo(ax + s * .09, ay + s * .06); c.lineTo(ax - s * .09, ay + s * .06); c.closePath(); c.fill();
+  }
   // front: steel frame
   const fg = c.createLinearGradient(x, 0, x + s, 0);
   fg.addColorStop(0, '#77808d'); fg.addColorStop(.5, '#b8c0cb'); fg.addColorStop(1, '#69717e');
@@ -259,4 +264,68 @@ function drawFuseCoil(c, x, y, s, t) {
   sg.addColorStop(0, 'rgba(255,250,220,1)'); sg.addColorStop(.3, 'rgba(255,190,60,.8)'); sg.addColorStop(1, 'rgba(255,90,20,0)');
   c.fillStyle = sg; ell(c, ex, ey, s * .18 * (.8 + .2 * Math.sin(t * 30)), s * .18); c.fill();
   c.restore();
+}
+
+/* a mirror bolted on top of a crate: '/' (m 1) or '\' (m 2). px, py: top-left of the crate's cell. */
+function drawMirror(c, px, py, s, hh, m, glow) {
+  const top = py - hh, p = s * .16;
+  const x0 = px + p, x1 = px + s - p, y0 = top + p, y1 = top + s - p;
+  const a = m === 1 ? [x0, y1, x1, y0] : [x0, y0, x1, y1];
+  c.save(); c.lineCap = 'round';
+  c.strokeStyle = 'rgba(0,0,0,.45)'; c.lineWidth = s * .2; c.beginPath(); c.moveTo(a[0], a[1] + s * .04); c.lineTo(a[2], a[3] + s * .04); c.stroke();
+  const g = c.createLinearGradient(a[0], a[1], a[2], a[3]);
+  g.addColorStop(0, '#9fb3c4'); g.addColorStop(.5, '#f4fbff'); g.addColorStop(1, '#8aa0b3');
+  c.strokeStyle = g; c.lineWidth = s * .14; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(a[2], a[3]); c.stroke();
+  c.strokeStyle = 'rgba(40,60,80,.8)'; c.lineWidth = Math.max(1, s * .02); c.stroke();
+  if (glow) { c.globalCompositeOperation = 'lighter'; c.strokeStyle = glow; c.lineWidth = s * .1; c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(a[2], a[3]); c.stroke(); }
+  c.restore();
+}
+/* the green receiver: a steel post with a lens. on: a green beam is reaching it */
+function drawReceiver(c, px, py, s, hh, on, t) {
+  const p = s * .1, top = py - hh * 1.6, w = s - p * 2;
+  const fg = c.createLinearGradient(0, top, 0, py + s);
+  fg.addColorStop(0, '#5c6672'); fg.addColorStop(1, '#2b3139');
+  c.fillStyle = fg; rr(c, px + p, top, w, s + hh * 1.6 - p, s * .1); c.fill();
+  c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = Math.max(1, s * .02); c.stroke();
+  const cx = px + s / 2, cy = top + s * .45, r = s * .22;
+  c.fillStyle = '#10151a'; ell(c, cx, cy, r * 1.25, r * 1.25); c.fill();
+  const g = c.createRadialGradient(cx - r * .3, cy - r * .3, 0, cx, cy, r);
+  if (on) { g.addColorStop(0, '#eafff2'); g.addColorStop(.5, '#3dff8a'); g.addColorStop(1, '#0d7a3a'); }
+  else { g.addColorStop(0, '#5b6b62'); g.addColorStop(1, '#1d2a23'); }
+  c.fillStyle = g; ell(c, cx, cy, r, r); c.fill();
+  if (on) { c.save(); c.globalCompositeOperation = 'lighter'; const h = c.createRadialGradient(cx, cy, 0, cx, cy, r * 3); h.addColorStop(0, 'rgba(80,255,150,' + (.5 + .2 * Math.sin(t * 6)) + ')'); h.addColorStop(1, 'rgba(80,255,150,0)'); c.fillStyle = h; ell(c, cx, cy, r * 3, r * 3); c.fill(); c.restore(); }
+}
+/* floor switches: power (kind 1, a lever) and lights (kind 2, a bulb). on: power is on / lights are on */
+function drawSwitch(c, x, y, s, kind, on, t) {
+  const p = s * .14, w = s - p * 2;
+  c.fillStyle = 'rgba(0,0,0,.35)'; rr(c, x + p + s * .03, y + p + s * .05, w, w, s * .1); c.fill();
+  const g = c.createLinearGradient(x, y, x, y + s);
+  g.addColorStop(0, '#59616c'); g.addColorStop(1, '#353b44');
+  c.fillStyle = g; rr(c, x + p, y + p, w, w, s * .1); c.fill();
+  c.strokeStyle = kind === 1 ? (on ? '#ffd23a' : '#7a6a3a') : (on ? '#fff3c4' : '#8a8a7a'); c.lineWidth = Math.max(1.5, s * .035); c.stroke();
+  const cx = x + s / 2, cy = y + s / 2;
+  if (kind === 1) { // a lightning bolt and a lever
+    c.fillStyle = on ? '#ffd23a' : '#6b6450';
+    c.beginPath(); c.moveTo(cx + s * .05, cy - s * .2); c.lineTo(cx - s * .1, cy + s * .03); c.lineTo(cx, cy + s * .03); c.lineTo(cx - s * .05, cy + s * .2); c.lineTo(cx + s * .1, cy - s * .03); c.lineTo(cx, cy - s * .03); c.closePath(); c.fill();
+    if (on) { c.save(); c.globalCompositeOperation = 'lighter'; const h = c.createRadialGradient(cx, cy, 0, cx, cy, s * .45); h.addColorStop(0, 'rgba(255,210,60,' + (.35 + .15 * Math.sin(t * 5)) + ')'); h.addColorStop(1, 'rgba(255,210,60,0)'); c.fillStyle = h; ell(c, cx, cy, s * .45, s * .45); c.fill(); c.restore(); }
+  } else { // a light bulb
+    c.fillStyle = on ? '#fff3c4' : '#9a9888'; ell(c, cx, cy - s * .04, s * .13, s * .13); c.fill();
+    c.fillStyle = '#6d7178'; c.fillRect(cx - s * .07, cy + s * .08, s * .14, s * .09);
+    if (!on) { c.save(); c.globalCompositeOperation = 'lighter'; const h = c.createRadialGradient(cx, cy, 0, cx, cy, s * .4); h.addColorStop(0, 'rgba(255,240,180,' + (.25 + .2 * Math.sin(t * 4)) + ')'); h.addColorStop(1, 'rgba(255,240,180,0)'); c.fillStyle = h; ell(c, cx, cy, s * .4, s * .4); c.fill(); c.restore(); }
+  }
+}
+const VENT_COLS = ['#5fd0ff', '#ffb347', '#c38bff', '#7dff9a'];
+/* a vent grille on the floor; both ends of a pair share a colour */
+function drawVent(c, x, y, s, k) {
+  const p = s * .1, w = s - p * 2, col = VENT_COLS[k % VENT_COLS.length];
+  c.fillStyle = '#14181d'; rr(c, x + p, y + p, w, w, s * .08); c.fill();
+  c.strokeStyle = '#8a939e'; c.lineWidth = Math.max(1, s * .03);
+  for (let i = 1; i < 5; i++) { const yy = y + p + w * i / 5; c.beginPath(); c.moveTo(x + p + s * .05, yy); c.lineTo(x + s - p - s * .05, yy); c.stroke(); }
+  c.strokeStyle = col; c.lineWidth = Math.max(1.5, s * .05); rr(c, x + p, y + p, w, w, s * .08); c.stroke();
+}
+/* a patch of deep shadow: guards do not see you in it */
+function drawShadowPatch(c, x, y, s) {
+  const g = c.createRadialGradient(x + s / 2, y + s / 2, s * .1, x + s / 2, y + s / 2, s * .62);
+  g.addColorStop(0, 'rgba(0,0,0,.78)'); g.addColorStop(.7, 'rgba(0,0,0,.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g; c.fillRect(x - s * .1, y - s * .1, s * 1.2, s * 1.2);
 }

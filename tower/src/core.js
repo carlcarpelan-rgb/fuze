@@ -16,6 +16,7 @@ function loadLevel(idx) {
   G.history = []; G.particles.length = 0;
   G.shake = 0; G.flash = 0; G.alarm = 0; G.introT = 0; G.endT = 0; G.panelShown = false; G.loseKind = ''; G.fuseFlash = 0; G.refillT = 0;
   G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {}; G.dinged = false; G.lit = false;
+  G.ventT = 0; G.powerT = 0; G.lightsT = 0;
   G.motes = [];
   const rnd = mulberry32(idx * 31 + 7);
   for (let i = 0; i < 26; i++) G.motes.push({ x: rnd() * G.st.w, y: rnd() * G.st.h, ph: rnd() * TAU, sp: .5 + rnd(), sz: .5 + rnd() });
@@ -53,6 +54,17 @@ function doMove(d) {
   G.lit = true; // the fuse catches on your first step: look as long as you like before that
   const ha = heroBase();
   h.ox = hb[0] - ha[0]; h.oy = hb[1] - ha[1]; h.t = 0; h.d = r.t === 'push' ? PUSH_D_T : MOVE_D; h.moving = 1;
+  if (r.vent) { // into the vent, out of the other end: no slide across the floor
+    h.ox = 0; h.oy = 0; h.t = 1; h.sy = .6; G.ventT = 1;
+    for (const [vx, vy] of [[r.vent[0], r.vent[1]], [r.vent[2], r.vent[3]]]) burst(vx + .5, vy + .5, 12, { sp: 2.5, life: .5, size: .12, col: '200,215,230', drag: 3, type: 'smoke' });
+    Snd.vent();
+  }
+  if (r.heard) { // the crunch: guards nearby spin round
+    for (const k of r.heard) { const gv = G.gv[k]; gv.alert = .001; gv.bt = 0; gv.bx = 0; gv.by = -.4; }
+    spawn({ x: st.px + .5, y: st.py + .5, vx: 0, vy: 0, life: 0, max: .7, size: .3, col: '255,255,255', add: true, drag: 0, grow: 5, type: 'ring' });
+  }
+  if (r.power != null) { Snd.power(r.power); G.powerT = 1; }
+  if (r.lights) { Snd.power(1); G.lightsT = 1; }
   st.blocks.forEach((b, i) => { if (bd[i][0] !== b.x || bd[i][1] !== b.y) { const v = G.bv[i]; v.ox = bd[i][0] - b.x; v.oy = bd[i][1] - b.y; v.t = 0; v.d = PUSH_D_T; } });
   st.cars.forEach((b, i) => { if (cd[i][0] !== b.x || cd[i][1] !== b.y) { const v = G.cv[i]; v.ox = cd[i][0] - b.x; v.oy = cd[i][1] - b.y; v.t = 0; v.d = PUSH_D_T * 1.3; } });
   st.guards.forEach((g, i) => { const v = G.gv[i]; if (gd[i][0] !== g.x || gd[i][1] !== g.y) { v.ox = gd[i][0] - g.x; v.oy = gd[i][1] - g.y; v.t = 0; v.d = MOVE_D * 1.1; v.moving = 1; } });
@@ -133,6 +145,8 @@ function update(dt) {
   G.flash = Math.max(0, G.flash - dt * 1.9);
   G.fuseFlash = Math.max(0, G.fuseFlash - dt * 2.5);
   G.refillT = Math.max(0, G.refillT - dt * 1.5);
+  G.ventT = Math.max(0, G.ventT - dt * 3); G.powerT = Math.max(0, G.powerT - dt * 2); G.lightsT = Math.max(0, G.lightsT - dt * 1.2);
+  if (G.ventT <= 0) h.sy = lerp(h.sy, 1, .3);
   G.blockCool = Math.max(0, G.blockCool - dt);
   const ps = G.particles;
   for (let i = ps.length - 1; i >= 0; i--) {
@@ -155,7 +169,7 @@ function update(dt) {
         // a held key keeps walking over open floor, but never pushes, never walks into a guard
         d = Input.held[Input.held.length - 1];
         const tx = st.px + TowerRules.DX[d], ty = st.py + TowerRules.DY[d], ti = ty * st.w + tx;
-        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
+        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
       }
       if (d >= 0) doMove(d);
     }
@@ -213,8 +227,11 @@ function render() {
   let sg = c.createLinearGradient(0, oy, 0, oy + s * .45);
   sg.addColorStop(0, 'rgba(0,0,0,.5)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
   c.fillStyle = sg; c.fillRect(ox, oy, C * s, s * .45);
-  // glass and spare fuses
+  // glass, shadows, switches and vents on the floor
   for (let i = 0; i < st.glass.length; i++) if (st.glass[i]) { const x = i % st.w, y = (i - x) / st.w; c.drawImage(V.glassS[(x * 3 + y) % 4], ox + x * s, oy + y * s); }
+  for (let i = 0; i < st.shadow.length; i++) if (st.shadow[i]) { const x = i % st.w, y = (i - x) / st.w; drawShadowPatch(c, ox + x * s, oy + y * s, s); }
+  for (let i = 0; i < st.sw.length; i++) if (st.sw[i]) { const x = i % st.w, y = (i - x) / st.w; drawSwitch(c, ox + x * s, oy + y * s, s, st.sw[i], st.sw[i] === 1 ? st.power : st.lit, t); }
+  G.L.ventPairs.forEach((v, k) => { drawVent(c, ox + v[0] * s, oy + v[1] * s, s, k); drawVent(c, ox + v[2] * s, oy + v[3] * s, s, k); });
   // what the guards can see: lit floor, brightest close to him, so danger reads at a glance
   const seen = new Set(), caughtNow = G.mode === 'lost' && G.loseKind === 'caught';
   st.guards.forEach((g, k) => {
@@ -222,6 +239,7 @@ function render() {
     const cells = TowerRules.sight(st, g);
     for (let j = 0; j < cells.length; j += 2) {
       const ci = cells[j], kk = cells[j + 1];
+      if (st.shadow[ci]) continue; // the torch does not reach into the shadows
       seen.add(ci);
       const x = ci % st.w, y = (ci - x) / st.w, a = kk === 0 ? .42 : .5, col = caughtNow ? '255,70,60,' : '255,220,120,';
       c.fillStyle = 'rgba(' + col + a + ')';
@@ -232,11 +250,12 @@ function render() {
   if (G.mode === 'play' || G.mode === 'intro' || G.mode === 'title') st.guards.forEach(g => drawGuardPlan(c, ox, oy, s, g, t, .9));
   // laser beams also mark the floor, so it is clear which squares are live
   st.lasers.forEach(l => {
+    const on = TowerRules.laserOn(st, l), green = l.c === 'g';
+    if (green) return; // green light is harmless: no warning on the floor
     TowerRules.beam(st, l).forEach(ci => {
       const x = ci % st.w, y = (ci - x) / st.w;
-      c.fillStyle = 'rgba(255,50,60,' + (.16 + .05 * Math.sin(t * 9)) + ')'; c.fillRect(ox + x * s + 1, oy + y * s + 1, s - 2, s - 2);
-      c.fillStyle = 'rgba(255,90,90,.55)';
-      if (l.d >= 2) c.fillRect(ox + x * s, oy + (y + .5) * s - 1, s, 2); else c.fillRect(ox + (x + .5) * s - 1, oy + y * s, 2, s);
+      if (on) { c.fillStyle = 'rgba(255,50,60,' + (.16 + .05 * Math.sin(t * 9)) + ')'; c.fillRect(ox + x * s + 1, oy + y * s + 1, s - 2, s - 2); }
+      else { c.strokeStyle = 'rgba(255,80,80,.35)'; c.setLineDash([s * .08, s * .08]); c.lineWidth = Math.max(1, s * .02); c.strokeRect(ox + x * s + s * .08, oy + y * s + s * .08, s * .84, s * .84); c.setLineDash([]); }
     });
   });
   // collect drawables
@@ -246,8 +265,9 @@ function render() {
     let px = ox + p[0] * s; const py = oy + p[1] * s;
     if (v.shake > 0) px += Math.sin(v.shake * 20) * v.shake * s * .04;
     c.drawImage(V.shadow, px - V.shPad + s * .13, py - V.shPad + s * .13);
-    items.push({ y: p[1], k: 0, x: px, py, v: v.v });
+    items.push({ y: p[1], k: 0, x: px, py, v: v.v, m: b.m });
   });
+  for (let i = 0; i < st.recv.length; i++) if (st.recv[i]) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 8, x: ox + x * s, py: oy + y * s, i }); }
   st.cars.forEach((cr, i) => {
     const p = carDrawn(i), v = G.cv[i];
     let px = ox + p[0] * s, py = oy + p[1] * s;
@@ -280,8 +300,11 @@ function render() {
   if (!riding) items.push(heroIt);
   items.sort((a, b) => a.y - b.y);
   const H = s * LIFT_H;
+  const recvLit = new Set(); st.lasers.forEach(l => { if (l.c === 'g' && TowerRules.laserOn(st, l)) { const b = TowerRules.beam(st, l); if (b.hit >= 0) recvLit.add(b.hit); } });
+  const liftOk = TowerRules.liftWorks(st);
   for (const it of items) {
-    if (it.k === 0) c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh));
+    if (it.k === 0) { c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh)); if (it.m) drawMirror(c, it.x, it.py, s, hh, it.m); }
+    else if (it.k === 8) drawReceiver(c, it.x, it.py, s, hh, recvLit.has(it.i), t);
     else if (it.k === 3) c.drawImage(V.colS, Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 6) c.drawImage(carSprite(it.h, it.col), Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 1) drawBomb(c, it.x, it.py, s, t, urg, it.v);
@@ -290,7 +313,7 @@ function render() {
     else if (it.k === 7) {
       // the lift opens when you are right in front of it, and you ride it up when you step in
       const lx = it.i % st.w, near = Math.abs(hx - lx) + Math.abs(hy - 1);
-      let want = near < .1 ? 1 : near <= 1.05 ? .35 : 0;
+      let want = !liftOk ? 0 : near < .1 ? 1 : near <= 1.05 ? .35 : 0;
       const here = riding && Math.abs(hx - lx) < .5;
       if (here) want = G.endT < .5 ? 1 : 0;
       const cur = G.liftOpen[it.i] || 0;
@@ -299,23 +322,52 @@ function render() {
         const k = G.liftIn || 0;
         drawHero(c, it.x + s / 2, lerp(oy + (1.43) * s, it.py + s - H * .55, k), s * (1 - .2 * k), { dir: k < .95 ? 0 : 1, walk: h.walk, moving: h.moving, push: 0, sx: 1, sy: 1, lift: 0, alpha: 1 });
       } : null;
-      drawLift(c, it.x, it.py, s, H, o, t, here && G.endT > .6, inside);
+      drawLift(c, it.x, it.py, s, H, o, t, here && G.endT > .6, inside, !liftOk);
     }
-    else if (it.a > 0.01) drawHero(c, it.x, it.py, s, { dir: h.dir, walk: h.walk, moving: h.moving, push: h.push, sx: 1, sy: h.sy * (1 + Math.sin(t * 3) * .012 * (1 - h.moving)), lift: h.lift, alpha: it.a });
+    else if (it.a > 0.01) drawHero(c, it.x, it.py, s, { dir: h.dir, walk: h.walk, moving: h.moving, push: h.push, sx: 1, sy: h.sy * (1 + Math.sin(t * 3) * .012 * (1 - h.moving)), lift: h.lift, alpha: it.a * (st.shadow[st.py * st.w + st.px] && h.t >= 1 ? .45 : 1) });
   }
-  // laser beams at waist height
+  // darkness: a dark floor once the fuse is lit (until the lights go on), or any floor with the power cut
+  const dark = G.mode !== 'title' && ((st.dark && !st.lit && G.lit) || (st.hasPower && !st.power));
+  if (dark || G.lightsT > 0) {
+    if (!V.darkC || V.darkC.width !== cw || V.darkC.height !== ch) { V.darkC = mkCanvas(cw, ch); }
+    const dc = V.darkC.getContext('2d');
+    dc.globalCompositeOperation = 'source-over'; dc.clearRect(0, 0, cw, ch);
+    dc.fillStyle = 'rgba(2,3,6,' + (dark ? .95 : .95 * G.lightsT) + ')'; dc.fillRect(0, 0, cw, ch);
+    dc.globalCompositeOperation = 'destination-out';
+    const hole = (x, y, r, a) => { const g = dc.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(0,0,0,' + a + ')'); g.addColorStop(.55, 'rgba(0,0,0,' + a * .8 + ')'); g.addColorStop(1, 'rgba(0,0,0,0)'); dc.fillStyle = g; dc.fillRect(x - r, y - r, r * 2, r * 2); };
+    hole(ox + (hx + .5) * s , oy + (hy + .45) * s, s * 1.9, 1);
+    // guards carry torches: you see them, and what they light
+    st.guards.forEach((g, k) => { if (!g.alive) return; const p = guardDrawn(k); hole(ox + (p[0] + .5) * s, oy + (p[1] + .4) * s, s * .9, .9); const sc = TowerRules.sight(st, g); for (let j = 0; j < sc.length; j += 2) { const ci = sc[j], x = ci % st.w, y = (ci - x) / st.w; hole(ox + (x + .5) * s, oy + (y + .5) * s, s * .7, .7); } });
+    // switches glow so you can find them again
+    for (let i = 0; i < st.sw.length; i++) if (st.sw[i]) { const x = i % st.w, y = (i - x) / st.w; hole(ox + (x + .5) * s, oy + (y + .5) * s, s * .6, .7); }
+    for (let i = 0; i < st.goal.length; i++) if (st.goal[i]) { const x = i % st.w, y = (i - x) / st.w; hole(ox + (x + .5) * s, oy + (y + .2) * s, s * .55, .5); }
+    c.restore(); c.save(); c.drawImage(V.darkC, 0, 0);
+  }
+  // laser beams at waist height, turning at mirrors
   c.globalCompositeOperation = 'lighter';
   st.lasers.forEach(l => {
-    const cells = TowerRules.beam(st, l), dx = TowerRules.DX[l.d], dy = TowerRules.DY[l.d];
-    const x0 = ox + (l.x + .5 + dx * .5) * s, y0 = oy + (l.y + .5 + dy * .5) * s - hh * .55;
-    const n = cells.length, x1 = x0 + dx * n * s, y1 = y0 + dy * n * s;
+    const on = TowerRules.laserOn(st, l), green = l.c === 'g';
+    const nextOn = l.on ? TowerRules.laserOn(st, l, st.n + 1) : on;
+    const dx = TowerRules.DX[l.d], dy = TowerRules.DY[l.d], lift = hh * .55;
+    const x0 = ox + (l.x + .5 + dx * .5) * s, y0 = oy + (l.y + .5 + dy * .5) * s - lift;
+    // the emitter: a lamp that shows whether it will fire after your next step
+    const col = green ? '80,255,150' : '255,70,70';
+    c.fillStyle = 'rgba(' + col + ',' + (on ? .95 : .25) + ')'; ell(c, x0, y0, s * .07, s * .07); c.fill();
+    if (l.on) { c.strokeStyle = 'rgba(' + col + ',' + (nextOn ? .9 : .25) + ')'; c.lineWidth = Math.max(1.5, s * .03); ell(c, x0, y0, s * .13, s * .13); c.stroke(); }
+    if (!on) return;
+    const b = TowerRules.beam(st, l), pts = [[x0, y0]];
+    let d = l.d, lx = l.x, ly = l.y;
+    for (let j = 0; j < b.turns.length; j += 3) { const ci = b.turns[j], x = ci % st.w, y = (ci - x) / st.w; pts.push([ox + (x + .5) * s, oy + (y + .5) * s - lift]); d = b.turns[j + 2]; lx = x; ly = y; }
+    // end: the far edge of the last open cell
+    let ex, ey;
+    if (b.length) { const ci = b[b.length - 1], x = ci % st.w, y = (ci - x) / st.w; ex = ox + (x + .5 + TowerRules.DX[d] * .5) * s; ey = oy + (y + .5 + TowerRules.DY[d] * .5) * s - lift; }
+    else { ex = x0; ey = y0; }
+    if (b.hit >= 0) { const x = b.hit % st.w, y = (b.hit - x) / st.w; ex = ox + (x + .5) * s; ey = oy + y * s - hh * 1.6 + s * .45; }
+    pts.push([ex, ey]);
     const fl = .75 + .25 * Math.sin(t * 40 + l.x);
-    c.strokeStyle = 'rgba(255,40,50,' + .35 * fl + ')'; c.lineWidth = s * .16; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-    c.strokeStyle = 'rgba(255,120,120,' + .9 * fl + ')'; c.lineWidth = Math.max(1.5, s * .035);
-    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-    c.fillStyle = 'rgba(255,90,90,.9)'; ell(c, x0, y0, s * .06, s * .06); c.fill();
-    if (n) { const g = c.createRadialGradient(x1, y1, 0, x1, y1, s * .2); g.addColorStop(0, 'rgba(255,120,110,.8)'); g.addColorStop(1, 'rgba(255,60,60,0)'); c.fillStyle = g; ell(c, x1, y1, s * .2, s * .2); c.fill(); }
+    const line = (w, a) => { c.strokeStyle = 'rgba(' + (green ? '60,255,140,' : '255,40,50,') + a * fl + ')'; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); pts.forEach((p, j) => j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke(); };
+    line(s * .16, .35); line(Math.max(1.5, s * .035), .9);
+    if (b.length || b.hit >= 0) { const g = c.createRadialGradient(ex, ey, 0, ex, ey, s * .2); g.addColorStop(0, 'rgba(' + (green ? '120,255,170' : '255,120,110') + ',.8)'); g.addColorStop(1, 'rgba(255,60,60,0)'); c.fillStyle = g; ell(c, ex, ey, s * .2, s * .2); c.fill(); }
   });
   c.globalCompositeOperation = 'source-over';
   c.restore();

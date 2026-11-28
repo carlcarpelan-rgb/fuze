@@ -117,7 +117,8 @@ function quick(lv, opts) {
   const NONE = [];
   const lean = (st, g) => ({ w, h, px: st.px, py: st.py, blockAt: st.blocks.length ? st.blockAt.slice() : st.blockAt, carAt: st.cars.length ? st.carAt.slice() : st.carAt,
     wall: st.wall, glass: g ? st.glass.slice() : st.glass, fuse: st.fuse, goal: st.goal,
-    blocks: st.blocks.map(b => ({ x: b.x, y: b.y })), cars: st.cars.map(c => ({ x: c.x, y: c.y, h: c.h })), guards: NONE, lasers: NONE });
+    recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent, n: 0, power: 1, lit: 1, hasPower: false, hasRecv: false,
+    blocks: st.blocks.map(b => ({ x: b.x, y: b.y, m: b.m })), cars: st.cars.map(c => ({ x: c.x, y: c.y, h: c.h })), guards: NONE, lasers: NONE });
   const frozen = opts.frozen; // 'all' -> nothing may be pushed (is the floor solvable by walking?)
   const root = { st: st0, t: 0, par: null, moves: '', push: null };
   const best = new Map([[key(st0), 0]]);
@@ -163,7 +164,8 @@ function quickReport(n, pops) {
   const glass = Math.round((n.t - moves.length * STEP) / GLASS);
   return { moves, seq, steps: moves.length, time: n.t / 10, pushes, carPush, distinct: crates.size + cars.size, glass, crushed, takedowns: 0, refills: 0, maxSince: n.t / 10, explored: pops };
 }
-const hasMovers = lv => (lv.guards && lv.guards.length) || (lv.lasers && lv.lasers.length) || lv.m.includes('F');
+// anything beyond crates, cars and glass needs the step-by-step search
+const hasMovers = lv => (lv.guards && lv.guards.length) || (lv.lasers && lv.lasers.length) || (lv.vents && lv.vents.length) || /[FqpRPLsV]/.test(lv.m);
 function best(lv, opts) { return hasMovers(lv) ? solve(lv, opts) : quick(lv, opts); }
 
 module.exports = { solve, quick, best, STEP, GLASS };

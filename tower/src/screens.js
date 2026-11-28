@@ -2,8 +2,9 @@
 function showHint() { /* Tower shows no in-game text */ }
 const Save = {
   d: { done: {}, best: {}, all: false, mute: false, music: true },
-  load() { try { const s = Platform.getItem('fuzetower.v1'); if (s) Object.assign(this.d, JSON.parse(s)); } catch (e) { /* start fresh */ } },
-  put() { Platform.setItem('fuzetower.v1', JSON.stringify(this.d)); }
+  key: LAB ? 'fuzetower.lab' : 'fuzetower.v1',
+  load() { try { const s = Platform.getItem(this.key); if (s) Object.assign(this.d, JSON.parse(s)); } catch (e) { /* start fresh */ } if (LAB && this.d.all == null) this.d.all = true; },
+  put() { Platform.setItem(this.key, JSON.stringify(this.d)); }
 };
 const isOpen = i => Save.d.all || i === 0 || !!Save.d.done[i - 1] || !!Save.d.done[i];
 function nextIdx() { for (let i = 0; i < LEVELS.length; i++) if (!Save.d.done[i]) return i; return 0; }
@@ -15,6 +16,8 @@ Object.assign(Snd, {
   takedown() { this.noise(.12, .5, 700, 120); this.tone(110, .18, 'sine', .45, 50); this.tone(880, .06, 'triangle', .06, 1300, .12); },
   refill() { [523, 784, 1047].forEach((f, i) => this.tone(f, .14, 'triangle', .16, f * 1.5, i * .06)); this.noise(.3, .1, 6000, 2500, 'highpass'); },
   roll() { this.noise(.22, .3, 500, 140); this.tone(70, .2, 'sine', .25, 55); },
+  vent() { this.noise(.3, .25, 900, 300); this.tone(180, .25, 'sine', .1, 90); },
+  power(on) { this.tone(on ? 220 : 330, .18, 'square', .08, on ? 440 : 110); this.noise(.08, .2, 3000, 1500); },
   ding() { this.tone(1319, .5, 'sine', .16, 1319); this.tone(1047, .7, 'sine', .14, 1047, .16); },
   alarm() { for (let i = 0; i < 4; i++) { this.tone(880, .18, 'square', .12, 660, i * .25); this.tone(660, .07, 'square', .08, 880, i * .25 + .18); } }
 });
@@ -55,17 +58,26 @@ function showSelect() {
   const nx = nextIdx();
   // one section per part of the tower, eight floors each
   let html = '';
-  for (let a = 0; a < LEVELS.length; a += 8) {
+  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows' };
+  const groups = [];
+  for (let i = 0; i < LEVELS.length; ) {
+    let j = i + 1;
+    if (LEVELS[i].idea) while (j < LEVELS.length && LEVELS[j].idea === LEVELS[i].idea) j++;
+    else j = Math.min(i + 8, LEVELS.length);
+    groups.push([i, j]); i = j;
+  }
+  for (const [a, e] of groups) {
     const th = TTHEMES[LEVELS[a].theme | 0];
     let cells = '', done = 0;
-    for (let i = a; i < Math.min(a + 8, LEVELS.length); i++) {
+    for (let i = a; i < e; i++) {
       const lv = LEVELS[i], open = isOpen(i), dn = !!Save.d.done[i];
       if (dn) done++;
       const cls = 'lv' + (open ? '' : ' locked') + (dn ? ' done' : '') + (open && i === nx ? ' next' : '') + (lv.boss ? ' boss' : '');
       cells += '<button class="' + cls + '" data-i="' + i + '"' + (open ? '' : ' disabled') + ' aria-label="Floor ' + (i + 1) + (lv.boss ? ', bomb' : '') + (open ? '' : ', locked') + '">' +
         '<span class="n">' + (i + 1) + '</span>' + (open ? '<span class="fname">' + lv.name + '</span>' : ICON.lock) + '</button>';
     }
-    html += '<section class="world" style="--acc:' + th.accent + '"><header><small>Floors ' + (a + 1) + ' to ' + Math.min(a + 8, LEVELS.length) + '</small><h3>' + th.name + '</h3><em>' + th.sub + '</em><b>' + done + ' / ' + Math.min(8, LEVELS.length - a) + '</b></header><div class="lgrid">' + cells + '</div></section>';
+    const title = LEVELS[a].idea ? IDEAS[LEVELS[a].idea] || LEVELS[a].idea : th.name, sub = LEVELS[a].idea ? th.name : th.sub;
+    html += '<section class="world" style="--acc:' + th.accent + '"><header><small>Floors ' + (a + 1) + ' to ' + e + '</small><h3>' + title + '</h3><em>' + sub + '</em><b>' + done + ' / ' + (e - a) + '</b></header><div class="lgrid">' + cells + '</div></section>';
   }
   $('worlds').innerHTML = html;
   $('selTotal').textContent = '';

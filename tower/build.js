@@ -53,8 +53,11 @@ window.addEventListener('resize', () => layout());
 })();
 window.__tower = { G, V, Save, startLevel, showSelect, showTitle, Input, doMove, undo, update, render, updateHud, layout, buildFrame, LEVELS, TowerRules };
 `;
-const levels = rd('tower/levels/levels.json');
-const js = [rd('tower/src/rules.js'), "(() => {\n'use strict';\nconst LEVELS = " + levels + ";",
+// node tower/build.js       -> dist/index.html (the floors)
+// node tower/build.js lab   -> dist/lab.html (two test floors per idea, all open)
+const LAB = process.argv[2] === 'lab';
+const levels = rd(LAB ? 'tower/levels/lab.json' : 'tower/levels/levels.json');
+const js = [rd('tower/src/rules.js'), "(() => {\n'use strict';\nconst LAB = " + LAB + ";\nconst LEVELS = " + levels + ";",
   rd('src/art.js'), rd('tower/src/art2.js'), fuzeGame, rd('tower/src/core.js'), rd('src/platform.js'), rd('src/music.js'),
   fuzeUi, rd('tower/src/screens.js'), main, '})();'].join('\n');
 if (js.includes('</script')) throw new Error('script close in js');
@@ -95,5 +98,7 @@ h1 { font-size: clamp(56px, 10vw, 120px); }
 </style>`);
 html = html.replace('/*__SCRIPT__*/', () => js);
 fs.mkdirSync(p.join(__dirname, 'dist'), { recursive: true });
-fs.writeFileSync(p.join(__dirname, 'dist/index.html'), html);
-console.log('built tower/dist/index.html', (fs.statSync(p.join(__dirname, 'dist/index.html')).size / 1024).toFixed(0) + ' kB');
+if (LAB) { html = html.replace('<title>Fuze Tower</title>', '<title>Fuze Tower: test floors</title>').replace('<div class="kick">Push · Sneak · Ride up</div>', '<div class="kick">Test floors · two per idea</div>'); }
+const out = LAB ? 'dist/lab.html' : 'dist/index.html';
+fs.writeFileSync(p.join(__dirname, out), html);
+console.log('built tower/' + out, (fs.statSync(p.join(__dirname, out)).size / 1024).toFixed(0) + ' kB');
