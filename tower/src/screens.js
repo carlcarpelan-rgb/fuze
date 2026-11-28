@@ -16,6 +16,7 @@ Object.assign(Snd, {
   takedown() { this.noise(.12, .5, 700, 120); this.tone(110, .18, 'sine', .45, 50); this.tone(880, .06, 'triangle', .06, 1300, .12); },
   refill() { [523, 784, 1047].forEach((f, i) => this.tone(f, .14, 'triangle', .16, f * 1.5, i * .06)); this.noise(.3, .1, 6000, 2500, 'highpass'); },
   roll() { this.noise(.22, .3, 500, 140); this.tone(70, .2, 'sine', .25, 55); },
+  radio() { this.tone(523, .12, 'triangle', .1, 523); this.tone(659, .12, 'triangle', .1, 659, .12); this.tone(784, .2, 'triangle', .1, 784, .24); },
   vent() { this.noise(.3, .25, 900, 300); this.tone(180, .25, 'sine', .1, 90); },
   power(on) { this.tone(on ? 220 : 330, .18, 'square', .08, on ? 440 : 110); this.noise(.08, .2, 3000, 1500); },
   ding() { this.tone(1319, .5, 'sine', .16, 1319); this.tone(1047, .7, 'sine', .14, 1047, .16); },
@@ -58,7 +59,7 @@ function showSelect() {
   const nx = nextIdx();
   // one section per part of the tower, eight floors each
   let html = '';
-  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows', plate: 'Pressure plates' };
+  const IDEAS = { laser: 'Red laser', green: 'Green laser and mirrors', guards: 'Guards', cars: 'Cars', dark: 'Darkness', noise: 'Noise', radio: 'Radio', power: 'Power', blink: 'Blinking lasers', vents: 'Vents', shadow: 'Shadows', plate: 'Pressure plates' };
   const groups = [];
   for (let i = 0; i < LEVELS.length; ) {
     let j = i + 1;

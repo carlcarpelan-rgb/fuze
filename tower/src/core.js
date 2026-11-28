@@ -16,7 +16,7 @@ function loadLevel(idx) {
   G.history = []; G.particles.length = 0;
   G.shake = 0; G.flash = 0; G.alarm = 0; G.introT = 0; G.endT = 0; G.panelShown = false; G.loseKind = ''; G.fuseFlash = 0; G.refillT = 0;
   G.blockCool = 0; G.blockDir = -1; G.lastBeep = 99; G.goalHit = null; G.liftIn = 0; G.liftOpen = {}; G.dinged = false; G.lit = false;
-  G.ventT = 0; G.powerT = 0; G.lightsT = 0;
+  G.ventT = 0; G.powerT = 0; G.lightsT = 0; G.radioOn = {};
   G.motes = [];
   const rnd = mulberry32(idx * 31 + 7);
   for (let i = 0; i < 26; i++) G.motes.push({ x: rnd() * G.st.w, y: rnd() * G.st.h, ph: rnd() * TAU, sp: .5 + rnd(), sz: .5 + rnd() });
@@ -59,9 +59,13 @@ function doMove(d) {
     for (const [vx, vy] of [[r.vent[0], r.vent[1]], [r.vent[2], r.vent[3]]]) burst(vx + .5, vy + .5, 12, { sp: 2.5, life: .5, size: .12, col: '200,215,230', drag: 3, type: 'smoke' });
     Snd.vent();
   }
-  if (r.heard) { // the crunch: guards nearby spin round
+  if (r.radio != null) { // music: a bump against the radio, notes, and guards nearby spin round to look
+    const rx = r.radio % st.w, ry = (r.radio - rx) / st.w;
+    h.bx = dx; h.by = dy; h.bt = 0; G.radioOn = G.radioOn || {}; G.radioOn[r.radio] = 1;
+    for (let j = 0; j < 3; j++) spawn({ x: rx + .5 + (j - 1) * .2, y: ry + .1, vx: (j - 1) * .5, vy: -1.6 - j * .3, life: 0, max: 1.1 - j * .15, size: .16, col: '255,230,140', add: true, drag: .5, grow: 0, type: 'spark' });
+    spawn({ x: rx + .5, y: ry + .4, vx: 0, vy: 0, life: 0, max: .8, size: .3, col: '255,230,140', add: true, drag: 0, grow: 6, type: 'ring' });
     for (const k of r.heard) { const gv = G.gv[k]; gv.alert = .001; gv.bt = 0; gv.bx = 0; gv.by = -.4; }
-    spawn({ x: st.px + .5, y: st.py + .5, vx: 0, vy: 0, life: 0, max: .7, size: .3, col: '255,255,255', add: true, drag: 0, grow: 5, type: 'ring' });
+    Snd.radio();
   }
   if (r.power != null) { Snd.power(r.power); G.powerT = 1; }
   if (r.lights) { Snd.power(1); G.lightsT = 1; }
@@ -169,7 +173,7 @@ function update(dt) {
         // a held key keeps walking over open floor, but never pushes, never walks into a guard
         d = Input.held[Input.held.length - 1];
         const tx = st.px + TowerRules.DX[d], ty = st.py + TowerRules.DY[d], ti = ty * st.w + tx;
-        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || (st.door[ti] && TowerRules.shut(st, ti)) || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
+        if (tx < 0 || ty < 0 || tx >= st.w || ty >= st.h || st.blockAt[ti] || st.carAt[ti] || st.wall[ti] || st.goal[ti] || st.recv[ti] || st.vent[ti] >= 0 || st.sw[ti] || st.radio[ti] || (st.door[ti] && TowerRules.shut(st, ti)) || st.guards.some(g => g.alive && g.x === tx && g.y === ty)) d = -1;
       }
       if (d >= 0) doMove(d);
     }
@@ -253,12 +257,12 @@ function render() {
   if (G.mode === 'play' || G.mode === 'intro' || G.mode === 'title') st.guards.forEach(g => drawGuardPlan(c, ox, oy, s, g, t, .9));
   // laser beams also mark the floor, so it is clear which squares are live
   st.lasers.forEach(l => {
-    const on = TowerRules.laserOn(st, l), green = l.c === 'g';
+    const on = TowerRules.laserOn(st, l), green = l.c === 'g', fc = l.on ? '60,150,255,' : '255,50,60,';
     if (green) return; // green light is harmless: no warning on the floor
     TowerRules.beam(st, l).forEach(ci => {
       const x = ci % st.w, y = (ci - x) / st.w;
-      if (on) { c.fillStyle = 'rgba(255,50,60,' + (.16 + .05 * Math.sin(t * 9)) + ')'; c.fillRect(ox + x * s + 1, oy + y * s + 1, s - 2, s - 2); }
-      else { c.strokeStyle = 'rgba(255,80,80,.35)'; c.setLineDash([s * .08, s * .08]); c.lineWidth = Math.max(1, s * .02); c.strokeRect(ox + x * s + s * .08, oy + y * s + s * .08, s * .84, s * .84); c.setLineDash([]); }
+      if (on) { c.fillStyle = 'rgba(' + fc + (.16 + .05 * Math.sin(t * 9)) + ')'; c.fillRect(ox + x * s + 1, oy + y * s + 1, s - 2, s - 2); }
+      else { c.strokeStyle = 'rgba(' + fc + '.45)'; c.setLineDash([s * .08, s * .08]); c.lineWidth = Math.max(1, s * .02); c.strokeRect(ox + x * s + s * .08, oy + y * s + s * .08, s * .84, s * .84); c.setLineDash([]); }
     });
   });
   // collect drawables
@@ -271,6 +275,7 @@ function render() {
     items.push({ y: p[1], k: 0, x: px, py, v: v.v, m: b.m });
   });
   for (let i = 0; i < st.door.length; i++) if (st.door[i] && TowerRules.shut(st, i)) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 9, x: ox + x * s, py: oy + y * s }); }
+  for (let i = 0; i < st.radio.length; i++) if (st.radio[i]) { const x = i % st.w, y = (i - x) / st.w; c.drawImage(V.shadow, ox + x * s - V.shPad + s * .1, oy + y * s - V.shPad + s * .1); items.push({ y, k: 10, x: ox + x * s, py: oy + y * s, i }); }
   for (let i = 0; i < st.recv.length; i++) if (st.recv[i]) { const x = i % st.w, y = (i - x) / st.w; items.push({ y, k: 8, x: ox + x * s, py: oy + y * s, i }); }
   st.cars.forEach((cr, i) => {
     const p = carDrawn(i), v = G.cv[i];
@@ -310,6 +315,7 @@ function render() {
     if (it.k === 0) { c.drawImage(V.crateS[it.v], Math.round(it.x), Math.round(it.py - hh)); if (it.m) drawMirror(c, it.x, it.py, s, hh, it.m); }
     else if (it.k === 8) drawReceiver(c, it.x, it.py, s, hh, recvLit.has(it.i), t);
     else if (it.k === 9) drawDoorShut(c, it.x, it.py, s, hh, t);
+    else if (it.k === 10) drawRadio(c, it.x, it.py, s, hh, !!(G.radioOn && G.radioOn[it.i]), t);
     else if (it.k === 3) c.drawImage(V.colS, Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 6) c.drawImage(carSprite(it.h, it.col), Math.round(it.x), Math.round(it.py - hh));
     else if (it.k === 1) drawBomb(c, it.x, it.py, s, t, urg, it.v);
@@ -356,7 +362,7 @@ function render() {
     const dx = TowerRules.DX[l.d], dy = TowerRules.DY[l.d], lift = hh * .55;
     const x0 = ox + (l.x + .5 + dx * .5) * s, y0 = oy + (l.y + .5 + dy * .5) * s - lift;
     // the emitter: a lamp that shows whether it will fire after your next step
-    const col = green ? '80,255,150' : '255,70,70';
+    const col = green ? '80,255,150' : l.on ? '80,160,255' : '255,70,70';
     c.fillStyle = 'rgba(' + col + ',' + (on ? .95 : .25) + ')'; ell(c, x0, y0, s * .07, s * .07); c.fill();
     if (l.on) { c.strokeStyle = 'rgba(' + col + ',' + (nextOn ? .9 : .25) + ')'; c.lineWidth = Math.max(1.5, s * .03); ell(c, x0, y0, s * .13, s * .13); c.stroke(); }
     if (!on) return;
@@ -370,9 +376,9 @@ function render() {
     if (b.hit >= 0) { const x = b.hit % st.w, y = (b.hit - x) / st.w; ex = ox + (x + .5) * s; ey = oy + (y + .5) * s - lift; } // straight into the lens
     pts.push([ex, ey]);
     const fl = .75 + .25 * Math.sin(t * 40 + l.x);
-    const line = (w, a) => { c.strokeStyle = 'rgba(' + (green ? '60,255,140,' : '255,40,50,') + a * fl + ')'; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); pts.forEach((p, j) => j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke(); };
+    const line = (w, a) => { c.strokeStyle = 'rgba(' + (green ? '60,255,140,' : l.on ? '60,140,255,' : '255,40,50,') + a * fl + ')'; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); pts.forEach((p, j) => j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke(); };
     line(s * .16, .35); line(Math.max(1.5, s * .035), .9);
-    if (b.length || b.hit >= 0) { const g = c.createRadialGradient(ex, ey, 0, ex, ey, s * .2); g.addColorStop(0, 'rgba(' + (green ? '120,255,170' : '255,120,110') + ',.8)'); g.addColorStop(1, 'rgba(255,60,60,0)'); c.fillStyle = g; ell(c, ex, ey, s * .2, s * .2); c.fill(); }
+    if (b.length || b.hit >= 0) { const g = c.createRadialGradient(ex, ey, 0, ex, ey, s * .2); g.addColorStop(0, 'rgba(' + (green ? '120,255,170' : l.on ? '130,190,255' : '255,120,110') + ',.8)'); g.addColorStop(1, 'rgba(255,60,60,0)'); c.fillStyle = g; ell(c, ex, ey, s * .2, s * .2); c.fill(); }
   });
   c.globalCompositeOperation = 'source-over';
   c.restore();

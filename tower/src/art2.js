@@ -356,3 +356,25 @@ function drawDoorShut(c, x, py, s, hh, t) {
   c.restore();
   c.strokeStyle = 'rgba(0,0,0,.75)'; c.lineWidth = Math.max(1, s * .025); rr(c, x + s * .03, top, s * .94, H, s * .06); c.stroke();
 }
+
+/* a portable radio on a little stand. playing: notes and a pulsing speaker */
+function drawRadio(c, px, py, s, hh, playing, t) {
+  const x = px + s * .14, w = s * .72, top = py + s * .22 - hh, H = s * .58 + hh;
+  c.fillStyle = '#2a2f36'; rr(c, x + w * .1, py + s * .72, w * .8, s * .14, s * .04); c.fill(); // stand
+  const g = c.createLinearGradient(0, top, 0, top + H);
+  g.addColorStop(0, '#c0392b'); g.addColorStop(1, '#7a1f17');
+  c.fillStyle = g; rr(c, x, top, w, H * .82, s * .08); c.fill();
+  c.strokeStyle = 'rgba(0,0,0,.7)'; c.lineWidth = Math.max(1, s * .02); c.stroke();
+  // handle and aerial
+  c.strokeStyle = '#2a2f36'; c.lineWidth = Math.max(1.5, s * .035);
+  c.beginPath(); c.moveTo(x + w * .25, top); c.lineTo(x + w * .3, top - s * .1); c.lineTo(x + w * .7, top - s * .1); c.lineTo(x + w * .75, top); c.stroke();
+  c.beginPath(); c.moveTo(x + w * .85, top); c.lineTo(x + w * 1.02, top - s * .28); c.stroke();
+  // speaker
+  const sx = x + w * .32, sy = top + H * .45, sr = s * .15 * (playing ? 1 + .06 * Math.sin(t * 22) : 1);
+  c.fillStyle = '#1b1e22'; ell(c, sx, sy, sr, sr); c.fill();
+  c.strokeStyle = '#555c66'; c.lineWidth = Math.max(1, s * .015); ell(c, sx, sy, sr * .6, sr * .6); c.stroke();
+  // dial
+  c.fillStyle = playing ? '#ffe08a' : '#d8cfa8'; rr(c, x + w * .58, top + H * .2, w * .32, H * .16, s * .02); c.fill();
+  c.fillStyle = '#e8e2d0'; ell(c, x + w * .74, top + H * .55, s * .05, s * .05); c.fill();
+  if (playing) { c.save(); c.globalCompositeOperation = 'lighter'; const h = c.createRadialGradient(sx, sy, 0, sx, sy, s * .5); h.addColorStop(0, 'rgba(255,220,120,.35)'); h.addColorStop(1, 'rgba(255,220,120,0)'); c.fillStyle = h; ell(c, sx, sy, s * .5, s * .5); c.fill(); c.restore(); }
+}

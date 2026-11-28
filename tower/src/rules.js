@@ -21,7 +21,8 @@
 //   'V' vent, paired by vents [[x1,y1,x2,y2]]: step in and you come out of the other end.
 //   'o' pressure plate, 'D' door: every door stands open while something weighs down a plate (you, a crate, a car,
 //       a guard, even a knocked-out one). Step off and it shuts, unless something is standing in the doorway.
-//   Glass is loud: step on it and every guard standing still within three squares turns to face the noise.
+//   'N' radio: fixed. Walk into it and it starts playing (that costs a step): every guard standing still
+//       within three squares of the radio turns to face it, and keeps looking at it.
 (function (root) {
   'use strict';
   const DX = [0, 0, -1, 1], DY = [-1, 1, 0, 0];
@@ -39,6 +40,7 @@
       else if (c === 'P') L.power.push({ x, y });
       else if (c === 'L') L.lamps.push({ x, y });
       else if (c === 's') L.shadow.push({ x, y });
+      else if (c === 'N') (L.radios || (L.radios = [])).push({ x, y });
       else if (c === 'o') (L.plates || (L.plates = [])).push({ x, y });
       else if (c === 'D') (L.doors || (L.doors = [])).push({ x, y });
       else if (c === 'X') L.walls.push({ x, y });
@@ -62,7 +64,7 @@
       blockAt: new Int16Array(N), carAt: new Int16Array(N), wall: new Uint8Array(N), glass: new Uint8Array(N), fuse: new Uint8Array(N), goal: new Uint8Array(N),
       blocks: L.blocks.map(b => ({ x: b.x, y: b.y, m: b.m })),
       cars: L.cars.map(c => ({ x: c.x, y: c.y, h: c.h })),
-      recv: new Uint8Array(N), sw: new Uint8Array(N), shadow: new Uint8Array(N), vent: new Int16Array(N).fill(-1), door: new Uint8Array(N),
+      recv: new Uint8Array(N), sw: new Uint8Array(N), shadow: new Uint8Array(N), vent: new Int16Array(N).fill(-1), door: new Uint8Array(N), radio: new Uint8Array(N),
       plates: (L.plates || []).map(o => o.y * L.w + o.x),
       n: 0, power: 1, lit: L.dark ? 0 : 1, hasPower: L.power.length > 0, hasRecv: L.recv.length > 0, dark: L.dark,
       guards: L.guards.map(g => {
@@ -85,6 +87,7 @@
     L.lamps.forEach(o => { st.sw[o.y * st.w + o.x] = 2; });
     L.shadow.forEach(o => { st.shadow[o.y * st.w + o.x] = 1; });
     (L.doors || []).forEach(o => { st.door[o.y * st.w + o.x] = 1; });
+    (L.radios || []).forEach(o => { st.radio[o.y * st.w + o.x] = 1; });
     L.ventPairs.forEach(v => { const a = v[1] * st.w + v[0], b = v[3] * st.w + v[2]; st.vent[a] = b; st.vent[b] = a; });
     return st;
   }
@@ -107,7 +110,7 @@
     return true;
   }
   // things you cannot see through
-  const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.recv[i] || (st.door[i] && shut(st, i));
+  const opaque = (st, i) => st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.recv[i] || st.radio[i] || (st.door[i] && shut(st, i));
 
   // A guard's view, as [cell, k] pairs (k = 1 ahead, 0 beside him): the square in front and the squares on either side.
   //     c
@@ -140,7 +143,7 @@
       if (st.recv[i]) { out.hit = i; break; }
       const b = st.blockAt[i];
       if (b && st.blocks[b - 1].m) { out.push(i); const nd = REFL[st.blocks[b - 1].m - 1][d]; out.turns.push(i, d, nd); d = nd; continue; }
-      if (st.wall[i] || b || st.carAt[i] || st.goal[i] || (st.door[i] && shut(st, i))) break;
+      if (st.wall[i] || b || st.carAt[i] || st.goal[i] || st.radio[i] || (st.door[i] && shut(st, i))) break;
       out.push(i);
     }
     return out;
@@ -169,7 +172,7 @@
       let ni = g.i + g.dir;
       if (ni < 0 || ni >= g.path.length) { g.dir = -g.dir; ni = g.i + g.dir; const p = g.path[ni]; g.face = dirOf(p.x - g.x, p.y - g.y); ev.push({ g: k, turn: true }); continue; }
       const p = g.path[ni], c = p.y * st.w + p.x;
-      if (st.blockAt[c] || st.carAt[c] || st.wall[c] || (st.door[c] && shut(st, c)) || guardAt(st, p.x, p.y) >= 0) { g.dir = -g.dir; g.face = dirOf(-(p.x - g.x), -(p.y - g.y)); ev.push({ g: k, turn: true }); continue; }
+      if (st.blockAt[c] || st.carAt[c] || st.wall[c] || st.radio[c] || (st.door[c] && shut(st, c)) || guardAt(st, p.x, p.y) >= 0) { g.dir = -g.dir; g.face = dirOf(-(p.x - g.x), -(p.y - g.y)); ev.push({ g: k, turn: true }); continue; }
       const fx = g.x, fy = g.y;
       g.face = dirOf(p.x - g.x, p.y - g.y); g.x = p.x; g.y = p.y; g.i = ni;
       ev.push({ g: k, from: [fx, fy] });
@@ -182,7 +185,7 @@
   function freeFor(st, x, y) {
     if (!inB(st, x, y)) return false;
     const i = y * st.w + x;
-    return !(st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.fuse[i] || st.recv[i] || st.sw[i] || st.vent[i] >= 0 || (st.door[i] && shut(st, i)) || guardAt(st, x, y) >= 0);
+    return !(st.wall[i] || st.blockAt[i] || st.carAt[i] || st.goal[i] || st.fuse[i] || st.recv[i] || st.radio[i] || st.sw[i] || st.vent[i] >= 0 || (st.door[i] && shut(st, i)) || guardAt(st, x, y) >= 0);
   }
 
   // One player step. Returns what happened, for the game's animation and the solver.
@@ -192,6 +195,21 @@
     const ti = ty * st.w + tx;
     if (st.wall[ti] || st.recv[ti]) return { t: 'blocked', wall: true };
     if (st.door[ti] && shut(st, ti)) return { t: 'blocked', door: true };
+    if (st.radio[ti]) {
+      // switch the radio on: you stay put, the music plays, guards standing still nearby turn to look at it
+      const res = { t: 'move', d, ev: [], cost: 0, radio: ti, heard: [] };
+      st.n++;
+      for (let k = 0; k < st.guards.length; k++) {
+        const g = st.guards[k];
+        if (!g.alive || g.path.length > 1 || Math.abs(g.x - tx) + Math.abs(g.y - ty) > 3) continue;
+        const ddx = tx - g.x, ddy = ty - g.y, f = Math.abs(ddx) >= Math.abs(ddy) ? (ddx < 0 ? 2 : 3) : (ddy < 0 ? 0 : 1);
+        if (f !== g.face || g.look) { g.face = f; g.look = null; res.heard.push(k); }
+      }
+      let s2 = spotted(st);
+      if (!s2) { s2 = moveGuards(st, res.ev); if (!s2) s2 = spotted(st); }
+      if (s2) { res.t = 'caught'; res.by = s2.by; res.g = s2.g; res.l = s2.l; }
+      return res;
+    }
     if (st.goal[ti] === 1 && d !== 0) return { t: 'blocked', lift: true }; // lift doors face the room
     if (st.goal[ti] === 1 && !liftWorks(st)) return { t: 'blocked', lift: true, locked: true };
     const res = { t: 'move', d, ev: [], cost: 0 };
@@ -223,16 +241,7 @@
     st.px = tx; st.py = ty;
     if (st.goal[ti]) { res.t = 'win'; res.goal = st.goal[ti] === 2 ? 'bomb' : 'lift'; return res; }
     st.n++;
-    if (st.glass[ti]) {
-      res.cost = GLASS_COST;
-      // the crunch is heard: guards standing still nearby turn towards it
-      for (let k = 0; k < st.guards.length; k++) {
-        const g = st.guards[k];
-        if (!g.alive || g.path.length > 1 || Math.abs(g.x - tx) + Math.abs(g.y - ty) > 3) continue;
-        const ddx = tx - g.x, ddy = ty - g.y, f = Math.abs(ddx) >= Math.abs(ddy) ? (ddx < 0 ? 2 : 3) : (ddy < 0 ? 0 : 1);
-        if (f !== g.face) { g.face = f; g.look = null; (res.heard || (res.heard = [])).push(k); }
-      }
-    }
+    if (st.glass[ti]) res.cost = GLASS_COST;
     if (st.fuse[ti]) { st.fuse[ti] = 0; res.refill = true; }
     if (st.sw[ti] === 1) { st.power ^= 1; res.power = st.power; }
     if (st.sw[ti] === 2 && !st.lit) { st.lit = 1; res.lights = true; }
@@ -254,7 +263,7 @@
       cars: st.cars.map(c => ({ x: c.x, y: c.y, h: c.h })),
       guards: st.guards.map(g => ({ path: g.path, look: g.look, li: g.li, i: g.i, dir: g.dir, x: g.x, y: g.y, face: g.face, alive: g.alive })),
       lasers: st.lasers,
-      recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent, door: st.door, plates: st.plates,
+      recv: st.recv, sw: st.sw, shadow: st.shadow, vent: st.vent, door: st.door, plates: st.plates, radio: st.radio,
       n: st.n, power: st.power, lit: st.lit, hasPower: st.hasPower, hasRecv: st.hasRecv, dark: st.dark
     };
   }
@@ -264,7 +273,7 @@
     s += '|';
     for (const c of st.cars) s += c.x + ',' + c.y + ';';
     s += '|';
-    for (const g of st.guards) s += g.alive ? g.i + ':' + g.dir + ':' + g.face + ':' + g.li + ';' : 'x;';
+    for (const g of st.guards) s += g.alive ? g.i + ':' + g.dir + ':' + g.face + ':' + (g.look ? g.li : 'h') + ';' : 'x;';
     for (let i = 0; i < st.glass.length; i++) if (st.glass[i]) s += 'g' + i;
     for (let i = 0; i < st.fuse.length; i++) if (st.fuse[i]) s += 'f' + i;
     if (st.hasPower) s += 'p' + st.power;
